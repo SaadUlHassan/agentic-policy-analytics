@@ -1,0 +1,77 @@
+[project]
+name = "policy-analytics"
+version = "0.1.0"
+description = "Agentic policy data analytics platform - API and worker"
+authors = [
+    { name = "Saad Ul Hassan", email = "saad.ul.hussan17@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.1",
+    "arq>=0.28.0",
+    "asyncpg>=0.32.0",
+    "boto3>=1.43.118",
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "langchain-aws>=1.9.0",
+    "langchain-core>=1.7.0",
+    "langchain-openai>=1.7.2",
+    "numpy>=2.5.4",
+    "openpyxl>=3.1.5",
+    "pandas>=3.1.0",
+    "pandera>=0.35.0",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.1",
+    "redis>=5.3.1",
+    "scipy>=1.18.1",
+    "sqlalchemy[asyncio]>=2.1.6",
+    "statsmodels>=0.15.0",
+    "structlog>=26.1.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "respx>=0.23.1",
+    "ruff>=0.17.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: calls real LLM providers or government APIs (excluded from default CI)",
+    "integration: requires Postgres and Redis",
+]
+addopts = "-m 'not live'"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-include = ["../scripts/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "SIM"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_ignores = true

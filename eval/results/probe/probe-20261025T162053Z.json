@@ -1,0 +1,72 @@
+{
+  "generated_at": "20261025T162053Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "global.anthropic.claude-sonnet-4-6",
+      "checks": {
+        "basic_invoke": {
+          "pass": false,
+          "ms": 597,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes.",
+          "usage": null
+        },
+        "tool_call": {
+          "pass": false,
+          "ms": 204,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        },
+        "structured_output": {
+          "pass": false,
+          "ms": 341,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        },
+        "react_turn": {
+          "pass": false,
+          "ms": 293,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        },
+        "streaming": {
+          "pass": false,
+          "ms": 339,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the ConverseStream operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        }
+      },
+      "all_pass": false
+    },
+    {
+      "provider": "bedrock",
+      "model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "checks": {
+        "basic_invoke": {
+          "pass": false,
+          "ms": 1144,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes.",
+          "usage": null
+        },
+        "tool_call": {
+          "pass": false,
+          "ms": 185,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        },
+        "structured_output": {
+          "pass": false,
+          "ms": 325,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        },
+        "react_turn": {
+          "pass": false,
+          "ms": 344,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the Converse operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        },
+        "streaming": {
+          "pass": false,
+          "ms": 201,
+          "detail": "ResourceNotFoundException: An error occurred (ResourceNotFoundException) when calling the ConverseStream operation (reached max retries: 0): Model use case details have not been submitted for this account. Fill out the Anthropic use case details form before using the model. If you have already filled out the form, try again in 15 minutes."
+        }
+      },
+      "all_pass": false
+    }
+  ]
+}

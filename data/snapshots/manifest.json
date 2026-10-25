@@ -1,0 +1,293 @@
+{
+  "captured_at": "2026-10-25T16:31:21+00:00",
+  "note": "Real public data captured byte-for-byte; not mock data.",
+  "failures": [],
+  "entries": [
+    {
+      "source": "singstat",
+      "dataset": "M182841",
+      "kind": "tabledata-p00",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M182841?limit=5000&offset=0",
+      "path": "singstat/M182841/tabledata-p00-c883c7c02e177d8c.json",
+      "sha256": "c883c7c02e177d8c2711cae3a3dbcfb91d74bf8689fe0144cd21d95c7c22dc4a",
+      "bytes": 11902,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:42+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M183891",
+      "kind": "tabledata-p00",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M183891?limit=5000&offset=0",
+      "path": "singstat/M183891/tabledata-p00-04932907be2ccf68.json",
+      "sha256": "04932907be2ccf6820fd47a8fde26c6e962f9be90e5f356959d99d94deef8b5c",
+      "bytes": 40274,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:43+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M184071",
+      "kind": "tabledata-p00",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M184071?limit=5000&offset=0",
+      "path": "singstat/M184071/tabledata-p00-63871e97d3f0e685.json",
+      "sha256": "63871e97d3f0e6850c082241099570174e4dcaeb233c7de1e5bdb6cc1f5a98a8",
+      "bytes": 135319,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:43+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M184021",
+      "kind": "tabledata-p00",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M184021?limit=5000&offset=0",
+      "path": "singstat/M184021/tabledata-p00-469838cb9bfd4b4f.json",
+      "sha256": "469838cb9bfd4b4f76ce204d5f5e8cab0d3c49945f22644b93e797a3e10978e1",
+      "bytes": 166457,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:44+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M184021",
+      "kind": "tabledata-p01",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M184021?limit=5000&offset=5000",
+      "path": "singstat/M184021/tabledata-p01-179bb60792e3eed4.json",
+      "sha256": "179bb60792e3eed4567251538fe4b291cafababdc7a24eba920364f5d06d4e90",
+      "bytes": 166600,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:44+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M184021",
+      "kind": "tabledata-p02",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M184021?limit=5000&offset=10000",
+      "path": "singstat/M184021/tabledata-p02-712a3411d49b2364.json",
+      "sha256": "712a3411d49b236412540588e52ca2d7bfa901076baaecef53b5004b8282c37a",
+      "bytes": 139110,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:45+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M184041",
+      "kind": "tabledata-p00",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M184041?limit=5000&offset=0",
+      "path": "singstat/M184041/tabledata-p00-f22023357a0d08b4.json",
+      "sha256": "f22023357a0d08b4cf85c53a8b66160c25eff1f38c0831d3db1a815458a14833",
+      "bytes": 119183,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:45+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M182081",
+      "kind": "tabledata-p00",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M182081?limit=5000&offset=0",
+      "path": "singstat/M182081/tabledata-p00-4382a818403a8b78.json",
+      "sha256": "4382a818403a8b78f8d9bfd606ed5a247273b85755125c02f509a9d33b08783d",
+      "bytes": 168764,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:45+00:00"
+    },
+    {
+      "source": "singstat",
+      "dataset": "M182081",
+      "kind": "tabledata-p01",
+      "url": "https://tablebuilder.singstat.gov.sg/api/table/tabledata/M182081?limit=5000&offset=5000",
+      "path": "singstat/M182081/tabledata-p01-f65ba4d00c9c819b.json",
+      "sha256": "f65ba4d00c9c819b5f3942956a0a97d192cdd78484d15586754a967deabf538b",
+      "bytes": 20124,
+      "content_type": "application/json; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:28:45+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_01966fdb498fa7fa2863635e25539693",
+      "kind": "metadata",
+      "url": "https://api-production.data.gov.sg/v2/public/api/datasets/d_01966fdb498fa7fa2863635e25539693/metadata",
+      "path": "datagov/d_01966fdb498fa7fa2863635e25539693/metadata-b4b0767b20fd4424.json",
+      "sha256": "b4b0767b20fd44247e95d80d99c87e8dede16cc1d81d09c7af692fb10c6fdceb",
+      "bytes": 1351,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:28:46+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_01966fdb498fa7fa2863635e25539693",
+      "kind": "datastore-p00",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_01966fdb498fa7fa2863635e25539693&limit=1000&offset=0",
+      "path": "datagov/d_01966fdb498fa7fa2863635e25539693/datastore-p00-9e0d48a59517c360.json",
+      "sha256": "9e0d48a59517c3601f7401085063e4e9f6f49cb806f40e6c5d1e57abef21bc31",
+      "bytes": 88766,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:17+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_01966fdb498fa7fa2863635e25539693",
+      "kind": "datastore-p01",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_01966fdb498fa7fa2863635e25539693&limit=1000&offset=1000",
+      "path": "datagov/d_01966fdb498fa7fa2863635e25539693/datastore-p01-f1c30ab217a395e6.json",
+      "sha256": "f1c30ab217a395e63b389c7916aa64db486630c7ccea6295a670045df97fb109",
+      "bytes": 14545,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:22+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "metadata",
+      "url": "https://api-production.data.gov.sg/v2/public/api/datasets/d_3f17bbf67d31d4d402caa8755eb74afc/metadata",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/metadata-968452b8c85d40b7.json",
+      "sha256": "968452b8c85d40b79aa49f724ccd19d953d43834e47934d96d538b8881d5f0e1",
+      "bytes": 1367,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:25+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "datastore-p00",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_3f17bbf67d31d4d402caa8755eb74afc&limit=1000&offset=0",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/datastore-p00-03f8593b4215b337.json",
+      "sha256": "03f8593b4215b33784920167b392952f4b3c9dd2832466c4b39c323b6145feb3",
+      "bytes": 91482,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:29+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "datastore-p01",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_3f17bbf67d31d4d402caa8755eb74afc&limit=1000&offset=1000",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/datastore-p01-5a161af2ed412d51.json",
+      "sha256": "5a161af2ed412d512217d59c1b2c87d23774d76428f8bf523f4c168a3bd89075",
+      "bytes": 96195,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:32+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "datastore-p02",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_3f17bbf67d31d4d402caa8755eb74afc&limit=1000&offset=2000",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/datastore-p02-97ec5f8833e103fa.json",
+      "sha256": "97ec5f8833e103fa23255b7dc0776da8f005091da7245f130419a8d66e7f6ee9",
+      "bytes": 97504,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:36+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "datastore-p03",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_3f17bbf67d31d4d402caa8755eb74afc&limit=1000&offset=3000",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/datastore-p03-f6e1b402dabd310b.json",
+      "sha256": "f6e1b402dabd310b54bc258fe05f159d8b9cf4a78b5019208e49fc19cf62a5c0",
+      "bytes": 97511,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:40+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "datastore-p04",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_3f17bbf67d31d4d402caa8755eb74afc&limit=1000&offset=4000",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/datastore-p04-12b23787b0811f81.json",
+      "sha256": "12b23787b0811f81edcd6843ca13601b306b7fc54a89933a98f12c7820308cf7",
+      "bytes": 68560,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:44+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_d2518fed6cc2014f0cd061b4570a9592",
+      "kind": "metadata",
+      "url": "https://api-production.data.gov.sg/v2/public/api/datasets/d_d2518fed6cc2014f0cd061b4570a9592/metadata",
+      "path": "datagov/d_d2518fed6cc2014f0cd061b4570a9592/metadata-4572ca293e585293.json",
+      "sha256": "4572ca293e585293ee6bcb8763fa92410195b9ba34a1d3656843c894765726c9",
+      "bytes": 6558,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:48+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_d2518fed6cc2014f0cd061b4570a9592",
+      "kind": "datastore-p00",
+      "url": "https://data.gov.sg/api/action/datastore_search?resource_id=d_d2518fed6cc2014f0cd061b4570a9592&limit=1000&offset=0",
+      "path": "datagov/d_d2518fed6cc2014f0cd061b4570a9592/datastore-p00-ee89766c7b5dcad7.json",
+      "sha256": "ee89766c7b5dcad71f0a17ca1dff2cbec6fa6fcedc37bebd1f1aa88d658ccdb4",
+      "bytes": 6599,
+      "content_type": "application/json",
+      "retrieved_at": "2026-10-25T16:30:52+00:00"
+    },
+    {
+      "source": "datagov",
+      "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
+      "kind": "download",
+      "url": "https://api-open.data.gov.sg/v1/public/api/datasets/d_3f17bbf67d31d4d402caa8755eb74afc/poll-download -> pre-signed S3 URL (not recorded)",
+      "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/download-d1097e7ba3442912.csv",
+      "sha256": "d1097e7ba34429127796e05ec9579b8c477434e90fdc46c7292d119297388ab4",
+      "bytes": 197818,
+      "content_type": "application/octet-stream",
+      "retrieved_at": "2026-10-25T16:31:17+00:00"
+    },
+    {
+      "source": "mom",
+      "dataset": "EmploymentTimeSeries",
+      "kind": "index",
+      "url": "https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx",
+      "path": "mom/EmploymentTimeSeries/index-debf6e4bbe2147da.html",
+      "sha256": "debf6e4bbe2147da0dff1097718958fe8801c828915f1a2272877643f0685adb",
+      "bytes": 68404,
+      "content_type": "text/html; charset=utf-8",
+      "retrieved_at": "2026-10-25T16:31:19+00:00"
+    },
+    {
+      "source": "mom",
+      "dataset": "mrsd_4_annl_emp_chg_by_ind",
+      "kind": "timeseries-20260320",
+      "url": "https://stats.mom.gov.sg/iMAS_Tables1/Time-Series-Table/mrsd_4_annl_emp_chg_by_ind_20032026.xlsx",
+      "path": "mom/mrsd_4_annl_emp_chg_by_ind/timeseries-20260320-ef422b8bff3a2f57.xlsx",
+      "sha256": "ef422b8bff3a2f573cb516b0b7b850d6c35a1f6607f4c43549c5fb54ed4c2ad5",
+      "bytes": 52725,
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "retrieved_at": "2026-10-25T16:31:19+00:00"
+    },
+    {
+      "source": "mom",
+      "dataset": "mrsd_4_annl_emp_chg_by_ind",
+      "kind": "timeseries-20260320",
+      "url": "https://stats.mom.gov.sg/iMAS_Tables1/CSV/mrsd_4_annl_emp_chg_by_ind_20032026.csv",
+      "path": "mom/mrsd_4_annl_emp_chg_by_ind/timeseries-20260320-3b143ffe569a8445.csv",
+      "sha256": "3b143ffe569a84450d782129509097e27e7008e1b8c228fad9e4cfaddb3e72c3",
+      "bytes": 82347,
+      "content_type": "application/octet-stream",
+      "retrieved_at": "2026-10-25T16:31:20+00:00"
+    },
+    {
+      "source": "mom",
+      "dataset": "mrsd_3_qtly_emp_chg_by_ind",
+      "kind": "timeseries-20260921",
+      "url": "https://stats.mom.gov.sg/iMAS_Tables1/Time-Series-Table/mrsd_3_qtly_emp_chg_by_ind_21092026.xlsx",
+      "path": "mom/mrsd_3_qtly_emp_chg_by_ind/timeseries-20260921-791dfebb682a8e98.xlsx",
+      "sha256": "791dfebb682a8e982441ad3a69857fb1bf8fb11b5de9a45975731bcfb92a252c",
+      "bytes": 105811,
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "retrieved_at": "2026-10-25T16:31:20+00:00"
+    },
+    {
+      "source": "mom",
+      "dataset": "mrsd_3_qtly_emp_chg_by_ind",
+      "kind": "timeseries-20260921",
+      "url": "https://stats.mom.gov.sg/iMAS_Tables1/CSV/mrsd_3_qtly_emp_chg_by_ind_21092026.csv",
+      "path": "mom/mrsd_3_qtly_emp_chg_by_ind/timeseries-20260921-6e78df1f0a4510ee.csv",
+      "sha256": "6e78df1f0a4510ee60344cd9dcf9380caadac5c5d92287d18d53089316577933",
+      "bytes": 377317,
+      "content_type": "application/octet-stream",
+      "retrieved_at": "2026-10-25T16:31:21+00:00"
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+{
+  "generated_at": "20261025T144928Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "global.anthropic.claude-sonnet-5-5",
+      "checks": {
+        "basic_invoke": {
+          "pass": false,
+          "ms": 1072,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap",
+          "usage": null
+        },
+        "tool_call": {
+          "pass": false,
+          "ms": 718,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap"
+        },
+        "structured_output": {
+          "pass": false,
+          "ms": 382,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap"
+        },
+        "react_turn": {
+          "pass": false,
+          "ms": 348,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap"
+        },
+        "streaming": {
+          "pass": false,
+          "ms": 371,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the ConverseStream operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com."
+        }
+      },
+      "all_pass": false
+    },
+    {
+      "provider": "bedrock",
+      "model": "global.anthropic.claude-haiku-5-5",
+      "checks": {
+        "basic_invoke": {
+          "pass": false,
+          "ms": 543,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap",
+          "usage": null
+        },
+        "tool_call": {
+          "pass": false,
+          "ms": 342,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap"
+        },
+        "structured_output": {
+          "pass": false,
+          "ms": 383,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap"
+        },
+        "react_turn": {
+          "pass": false,
+          "ms": 19767,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com. We ap"
+        },
+        "streaming": {
+          "pass": false,
+          "ms": 166,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the ConverseStream operation (reached max retries: 0): Your account is currently being verified. Verification normally takes less than 2 hours. Until your account is verified, you may not have access to this operation. If you are still receiving this message after more than 2 hours, please let us know by writing to aws-verification@amazon.com."
+        }
+      },
+      "all_pass": false
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 2759,
+          "detail": null,
+          "usage": {
+            "input_tokens": 13,
+            "output_tokens": 17,
+            "total_tokens": 30,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 7
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 2522,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_DBS6xpOR7XnO6E5yOz9emNp3",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 3806,
+          "detail": {
+            "intent": "Analyse employment trends in Singapore's technology sector over 2020-2024, focusing on changes in employment levels and growth over time.",
+            "sector": "Technology sector, assumed to correspond to SSIC 2020 Section J: Information & Communications.",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "year-on-year employment change",
+              "employment growth rate",
+              "share of total employment"
+            ],
+            "needs_clarification": false,
+            "rationale": "The request asks for employment trends across 2020-2024, so the plan focuses on time-series employment metrics and growth indicators. Because \u201ctechnology sector\u201d is not a formal SSIC sector label, it is mapped by assumption to SSIC 2020 Section J: Information & Communications."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 10342,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_7YivsAX8PLdCMl9uPixw6aUF",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": false,
+            "final_text": "Fetched the required SingStat data:\n\n- **Table:** M182841 \u2014 Year-End Employment by Sector  \n- **Series:** 3.4 \u2014 Information And Communications  \n- **Unit:** Thousand persons  \n- **Computation ID:** `c1`\n\nAnalysis-ready references for the technology-sector employment trend:\n\n| Year | Employment |\n|---|---:|\n| 2020 | {{c1.2020}} |\n| 2021 | {{c1.2021}} |\n| 2022 | {{c1.2022}} |\n| 2023 | {{c1.2023}} |\n| 2024 | {{c1.2024}} |\n\nUseful derived measures:\n\n- **Change from 2020 to 2024:** {{c1.abs_change}} "
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1643,
+          "detail": {
+            "chunks": 13,
+            "first_chunk_ms": 1446,
+            "text": "1\n2\n3\n4\n5"
+          }
+        }
+      },
+      "all_pass": true
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 3345,
+          "detail": null,
+          "usage": {
+            "input_tokens": 13,
+            "output_tokens": 4,
+            "total_tokens": 17,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1686,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_Qwj6UKU87MeA5EXN2JlipiiD",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": false,
+          "ms": 60016,
+          "detail": "OpenAITimeoutError: Request timed out."
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 3545,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_yb4lKHkTy24g4hKSpZyIBx64",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": false,
+            "final_text": "I fetched the relevant SingStat series for **Information And Communications** from table **M182841**.\n\n- **Table:** M182841\n- **Series:** 3.4\n- **Sector:** Information And Communications\n- **Unit:** Thousand\n- **Computation ID:** `c1`\n\nYou can reference the numbers via placeholders such as `{{c1.pct_change}}` as needed."
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1311,
+          "detail": {
+            "chunks": 13,
+            "first_chunk_ms": 1228,
+            "text": "1  \n2  \n3  \n4  \n5"
+          }
+        }
+      },
+      "all_pass": false
+    }
+  ]
+}
