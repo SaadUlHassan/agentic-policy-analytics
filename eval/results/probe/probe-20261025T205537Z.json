@@ -1,0 +1,168 @@
+{
+  "generated_at": "20261025T205537Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "apac.amazon.nova-pro-v1:0",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 975,
+          "detail": null,
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "total_tokens": 10,
+            "input_token_details": {
+              "cache_creation": 0,
+              "cache_read": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1393,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_z2KHClBAkIEdID2Ary1aGG",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 1298,
+          "detail": {
+            "intent": "Analyse employment trends in the technology sector from 2020-2024",
+            "sector": "SSIC 2020 Section J Information & Communications",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "job vacancies"
+            ],
+            "needs_clarification": false,
+            "rationale": "This plan was chosen to provide insights into the employment trends within the technology sector over a five-year period. Understanding these trends can help inform policy decisions and strategic planning within the industry."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 2145,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_B3eMrJbKYhZ0N0ViPzmBeZ",
+              "type": "tool_call"
+            },
+            "tool_rounds": 1,
+            "final_text": "Based on the available data, the next step would be to analyze the percentage change in employment in the Information and Communications sector from 2020 to 2024. This can be done by calculating the percentage change between the employment figures for each year. However, the specific employment figures for each year are not provided in the tool result, so I cannot perform the calculation directly. \n\nIf you have the specific employment figures for each year, I can proceed with the analysis. Other"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 577,
+          "detail": {
+            "chunks": 14,
+            "first_chunk_ms": 450,
+            "text": "[][{\"type\": \"text\", \"text\": \"Sure\", \"index\": 0}][{\"type\": \"text\", \"text\": \", here are\", \"index\": 0}][{\"type\": \"text\", \"text\": \" the numbers from\", \"index\": 0}][{\"type\": \"text\", \"text\": \" 1 to 5,\", \"in"
+          }
+        }
+      },
+      "all_pass": true
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 1399,
+          "detail": null,
+          "usage": {
+            "input_tokens": 13,
+            "output_tokens": 4,
+            "total_tokens": 17,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1627,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_QKKmpzaOW6VespEUkzpemM2y",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 3621,
+          "detail": {
+            "intent": "Analyse how employment in Singapore\u2019s technology sector changed annually from 2020 to 2024, including overall direction, growth/decline, and key inflection points.",
+            "sector": "Technology sector, assumed to correspond to SSIC 2020 Section J: Information & Communications.",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "year-on-year employment change",
+              "year-on-year employment growth rate",
+              "share of total employment"
+            ],
+            "needs_clarification": false,
+            "rationale": "The question asks for employment trends over a defined period, so the plan focuses on annual employment levels and changes from 2020 through 2024. Because \u201ctechnology sector\u201d is not a formal SSIC category, I assume it maps to SSIC 2020 Section J: Information & Communications for consistent statistical analysis."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 3466,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_7M7YKVYfGH9Zbny6ckH6pPf0",
+              "type": "tool_call"
+            },
+            "tool_rounds": 1,
+            "final_text": "Fetched SingStat table M182841, series 3.4: **Information And Communications** (year-end employment, unit: thousand) for analysing Singapore\u2019s technology-sector employment trends from 2020\u20132024.\n\nNext step: calculate the 2020\u20132024 change, annual growth pattern, and overall percentage change using the fetched series, e.g. {{c1.pct_change}}."
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1326,
+          "detail": {
+            "chunks": 13,
+            "first_chunk_ms": 1278,
+            "text": "1\n2\n3\n4\n5"
+          }
+        }
+      },
+      "all_pass": true
+    }
+  ]
+}
