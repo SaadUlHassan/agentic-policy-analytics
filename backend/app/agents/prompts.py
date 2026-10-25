@@ -23,6 +23,9 @@ Turn the researcher's question into a research plan.
   assumption. IT & Other Information Services (it_info_services) is a narrower subsector, never a synonym.
 - If the question names no period, use the most recent five complete years and say so in assumptions.
 - Mark in_scope=false for anything that is not Singapore labour-market data by industry.
+- Set needs_clarification only when no sector or metric can sensibly be inferred (e.g. "how is the
+  economy doing?"). Then ask one short question and offer two to four concrete options. When a
+  reasonable default exists, use it and record it as an assumption instead of asking.
 - Do not answer the question or state any figures."""
 
 

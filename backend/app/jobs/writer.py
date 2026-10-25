@@ -164,6 +164,8 @@ class FencedWriter:
         status: AnalysisStatus,
         report: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
+        *,
+        active_ms: int = 0,
     ) -> None:
         """Commit the report, the terminal status and the terminal event in one transaction.
 
@@ -175,8 +177,9 @@ class FencedWriter:
             await self._fence(
                 session,
                 "status = :status, finished_at = now(), lease_owner = NULL, "
-                "lease_expires_at = NULL, error = CAST(:error AS JSONB), row_version = row_version + 1",
-                {"status": status.value, "error": _json(error)},
+                "lease_expires_at = NULL, error = CAST(:error AS JSONB), row_version = row_version + 1, "
+                "active_ms_used = active_ms_used + :ms",
+                {"status": status.value, "error": _json(error), "ms": active_ms},
             )
             if report is not None:
                 await session.execute(
@@ -193,6 +196,30 @@ class FencedWriter:
             )
             await session.commit()
         await self._publish(seq)
+
+    async def pause(self, interrupt_id: str, question: dict[str, Any], *, active_ms: int) -> int:
+        """Wait for the researcher: release the lease (the worker slot is freed), stop the active-time
+        clock and announce the question, all in one transaction. Returns the clarification version
+        an answer must quote."""
+        async with self.sessions() as session:
+            (version,) = await self._fence(
+                session,
+                "status = 'awaiting_input', clarification_version = clarification_version + 1, "
+                "pending_interrupt_id = :iid, lease_owner = NULL, lease_expires_at = NULL, "
+                "active_ms_used = active_ms_used + :ms, row_version = row_version + 1",
+                {"iid": interrupt_id, "ms": active_ms},
+                returning="clarification_version",
+            )
+            seq = await self._append_event(
+                session,
+                "coordinator",
+                "clarification",
+                "Question for the researcher",
+                {**question, "version": version},
+            )
+            await session.commit()
+        await self._publish(seq)
+        return int(version)
 
 
 def _json(value: Any) -> str | None:

@@ -11,15 +11,23 @@ from typing import Annotated, Any
 import structlog
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.problems import ProblemError
-from app.db.models import TERMINAL_STATUSES, Analysis, ReportRow
+from app.db.models import TERMINAL_STATUSES, Analysis, AnalysisEvent, AnalysisStatus, ReportRow
 from app.db.session import get_sessionmaker
 from app.events.stream import PAGE_SIZE, events_after
-from app.jobs.lifecycle import create_analysis, dispatch_pending
+from app.jobs.lifecycle import (
+    AnalysisNotFound,
+    LifecycleConflict,
+    Transition,
+    create_analysis,
+    dispatch_pending,
+    request_cancel,
+    submit_clarification,
+)
 from app.jobs.writer import event_channel
 
 log = structlog.get_logger()
@@ -31,6 +39,20 @@ Sessions = Annotated[async_sessionmaker[AsyncSession], Depends(get_sessionmaker)
 
 class CreateAnalysis(BaseModel):
     query: str = Field(min_length=3, max_length=1000)
+
+
+class Clarify(BaseModel):
+    clarification_version: int
+    answer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] | None = (
+        None
+    )
+    proceed_with_assumptions: bool = False
+
+    @model_validator(mode="after")
+    def _one_choice(self) -> Clarify:
+        if (self.answer is None) == (not self.proceed_with_assumptions):
+            raise ValueError("send either an answer or proceed_with_assumptions=true, not both")
+        return self
 
 
 class AnalysisSummary(BaseModel):
@@ -47,15 +69,56 @@ def _summary(a: Analysis) -> AnalysisSummary:
     )
 
 
+async def _dispatch(request: Request, sessions: async_sessionmaker[AsyncSession], analysis_id: str) -> None:
+    try:
+        await dispatch_pending(sessions, request.app.state.queue)
+    except Exception:  # the worker's reconciler picks the intent up; the request still succeeded
+        log.warning("immediate_dispatch_failed", analysis_id=analysis_id)
+
+
 @router.post("/api/analyses", status_code=202)
 async def create(body: CreateAnalysis, request: Request, sessions: Sessions) -> JSONResponse:
     async with sessions() as session:
         analysis = await create_analysis(session, body.query.strip())
-    try:
-        await dispatch_pending(sessions, request.app.state.queue)
-    except Exception:  # the worker's dispatch cron picks the intent up; the request still succeeded
-        log.warning("immediate_dispatch_failed", analysis_id=analysis.id)
+    await _dispatch(request, sessions, analysis.id)
     return JSONResponse({"id": analysis.id, "status": analysis.status}, status_code=202)
+
+
+async def _hint(request: Request, analysis_id: str, change: Transition) -> None:
+    if change.event_seq is not None:
+        with contextlib.suppress(Exception):  # a hint only; WebSocket readers also poll
+            await request.app.state.redis.publish(event_channel(analysis_id), str(change.event_seq))
+
+
+def _as_problem(exc: Exception) -> ProblemError:
+    if isinstance(exc, LifecycleConflict):
+        return ProblemError(409, exc.code, "Conflicting analysis state", exc.detail)
+    return ProblemError(404, "ANALYSIS_NOT_FOUND", "Analysis not found")
+
+
+@router.post("/api/analyses/{analysis_id}/clarify", status_code=202)
+async def clarify(analysis_id: str, body: Clarify, request: Request, sessions: Sessions) -> JSONResponse:
+    response: dict[str, Any] = {"proceed": True} if body.proceed_with_assumptions else {"answer": body.answer}
+    try:
+        change = await submit_clarification(sessions, analysis_id, body.clarification_version, response)
+    except (LifecycleConflict, AnalysisNotFound) as exc:
+        raise _as_problem(exc) from exc
+    await _hint(request, analysis_id, change)
+    await _dispatch(request, sessions, analysis_id)
+    return JSONResponse({"id": analysis_id, "status": change.status}, status_code=202)
+
+
+@router.post("/api/analyses/{analysis_id}/cancel", status_code=202)
+async def cancel(analysis_id: str, request: Request, sessions: Sessions) -> JSONResponse:
+    try:
+        change = await request_cancel(sessions, analysis_id)
+    except (LifecycleConflict, AnalysisNotFound) as exc:
+        raise _as_problem(exc) from exc
+    await _hint(request, analysis_id, change)
+    # A running analysis stops at its next step boundary and then reports "cancelled" itself.
+    return JSONResponse(
+        {"id": analysis_id, "status": change.status, "cancel_requested": True}, status_code=202
+    )
 
 
 def _encode_cursor(a: Analysis) -> str:
@@ -98,11 +161,21 @@ async def get_analysis(analysis_id: str, sessions: Sessions) -> dict[str, Any]:
         if analysis is None:
             raise ProblemError(404, "ANALYSIS_NOT_FOUND", "Analysis not found")
         report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+        question = None
+        if analysis.status == AnalysisStatus.AWAITING_INPUT:
+            question = await session.scalar(
+                select(AnalysisEvent.detail)
+                .where(AnalysisEvent.analysis_id == analysis_id, AnalysisEvent.type == "clarification")
+                .order_by(AnalysisEvent.seq.desc())
+                .limit(1)
+            )
     return {
         **_summary(analysis).model_dump(mode="json"),
         "plan": analysis.plan,
         "report": report,
         "error": analysis.error,
+        "clarification": question,
+        "cancel_requested": analysis.cancel_requested_at is not None,
         "last_event_seq": analysis.last_event_seq,
     }
 

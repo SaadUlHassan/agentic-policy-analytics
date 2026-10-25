@@ -28,6 +28,17 @@ export const createAnalysis = (query: string) =>
 
 export const getAnalysis = (id: string) => request<AnalysisDetail>(`/api/analyses/${encodeURIComponent(id)}`);
 
+export type ClarificationAnswer = { answer: string } | { proceed_with_assumptions: true };
+
+export const clarifyAnalysis = (id: string, version: number, answer: ClarificationAnswer) =>
+  request<{ id: string; status: string }>(`/api/analyses/${encodeURIComponent(id)}/clarify`, {
+    method: "POST",
+    body: JSON.stringify({ clarification_version: version, ...answer }),
+  });
+
+export const cancelAnalysis = (id: string) =>
+  request<{ id: string; status: string }>(`/api/analyses/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+
 export const listAnalyses = (limit = 20) =>
   request<{ items: AnalysisSummary[]; next_cursor: string | null }>(`/api/analyses?limit=${limit}`);
 

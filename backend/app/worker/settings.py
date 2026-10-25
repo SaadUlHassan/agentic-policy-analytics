@@ -14,7 +14,8 @@ from arq.connections import RedisSettings
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import get_sessionmaker
-from app.jobs.lifecycle import dispatch_pending
+from app.jobs.checkpoint import ensure_tables, open_pool
+from app.jobs.lifecycle import Reconciled, reconcile
 from app.jobs.runner import execute
 
 log = structlog.get_logger()
@@ -27,13 +28,21 @@ async def ping(ctx: dict[str, Any]) -> str:
 
 async def run_analysis(ctx: dict[str, Any], analysis_id: str, intent_id: int) -> str:
     return await execute(
-        get_sessionmaker(), ctx["publisher"], get_settings(), analysis_id, intent_id, owner=ctx["owner"]
+        get_sessionmaker(),
+        ctx["publisher"],
+        get_settings(),
+        analysis_id,
+        intent_id,
+        owner=ctx["owner"],
+        checkpoints=ctx["checkpoints"],
     )
 
 
-async def dispatch(ctx: dict[str, Any]) -> int:
-    """Re-dispatch intents whose immediate enqueue never happened (e.g. the API crashed after commit)."""
-    return await dispatch_pending(get_sessionmaker(), ctx["redis"])
+async def reconciler(ctx: dict[str, Any]) -> None:
+    """Dispatch, redeliver and recover analyses without relying on any process restarting."""
+    result = await reconcile(get_sessionmaker(), ctx["redis"])
+    if result != Reconciled():
+        log.info("reconciled", **vars(result))
 
 
 async def on_startup(ctx: dict[str, Any]) -> None:
@@ -41,16 +50,20 @@ async def on_startup(ctx: dict[str, Any]) -> None:
     configure_logging(settings.log_level)
     ctx["publisher"] = redis.from_url(settings.redis_url)
     ctx["owner"] = f"{socket.gethostname()}:{os.getpid()}"
+    ctx["checkpoints"] = open_pool(settings.database_url)
+    await ctx["checkpoints"].open()
+    await ensure_tables(ctx["checkpoints"])
     log.info("worker_started", owner=ctx["owner"])
 
 
 async def on_shutdown(ctx: dict[str, Any]) -> None:
     await ctx["publisher"].aclose()
+    await ctx["checkpoints"].close()
 
 
 class WorkerSettings:
     functions = [ping, run_analysis]
-    cron_jobs = [cron(dispatch, second=set(range(0, 60, 5)), run_at_startup=True)]
+    cron_jobs = [cron(reconciler, second={0, 15, 30, 45}, run_at_startup=True)]
     on_startup = on_startup
     on_shutdown = on_shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

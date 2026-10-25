@@ -33,6 +33,9 @@ class FakeCtx:
         self.writer = FakeWriter()
         self.deadline = float("inf")
 
+    async def check_cancel(self) -> None:
+        pass
+
 
 def _many_calls(count: int) -> AIMessage:
     return AIMessage(

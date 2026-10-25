@@ -9,10 +9,11 @@ from typing import Any, Literal, TypedDict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
-from langgraph.types import Command
+from langgraph.types import Command, interrupt
 
 from app.agents import prompts
 from app.agents.context import AgentContext
+from app.agents.evidence import to_refs
 from app.agents.plan import NextAction, ResearchPlan, validate_plan, vocabulary
 from app.agents.react import run_react
 from app.agents.report import ReportNarrative, build_report
@@ -32,6 +33,10 @@ class GraphState(TypedDict, total=False):
     plan: dict[str, Any]
     objective: str
     rounds: dict[str, int]
+    # References to the evidence gathered so far, so a resumed execution can rebuild its store.
+    evidence: dict[str, Any]
+    clarification: str
+    clarified: bool
     report: dict[str, Any]
     status: str
 
@@ -42,10 +47,15 @@ def _plan(state: GraphState) -> ResearchPlan:
 
 async def interpret(
     state: GraphState, runtime: Runtime[AgentContext]
-) -> Command[Literal["supervise", "report"]]:
+) -> Command[Literal["supervise", "report", "clarify"]]:
     ctx = runtime.context
+    await ctx.check_cancel()
     sectors, metrics = vocabulary(ctx.catalog, ctx.taxonomy)
     messages = [SystemMessage(prompts.coordinator_plan(sectors, metrics)), HumanMessage(state["query"])]
+    if answer := state.get("clarification"):
+        messages.append(
+            HumanMessage(f"The researcher clarified: {answer}. Plan with this; do not ask again.")
+        )
     plan = await ctx.router.structured(
         ResearchPlan, messages, agent="coordinator", purpose="plan", deadline=ctx.deadline
     )
@@ -74,11 +84,40 @@ async def interpret(
                 ],
             }
         )
+    rounds = {"extraction": 0, "analytics": 0}
+    if plan.needs_clarification and not state.get("clarified"):
+        return Command(update={"plan": plan.model_dump(), "rounds": rounds}, goto="clarify")
+    return await _adopt_plan(ctx, plan, rounds)
+
+
+async def _adopt_plan(ctx: AgentContext, plan: ResearchPlan, rounds: dict[str, int]) -> Command[Any]:
+    plan = plan.model_copy(update={"needs_clarification": False})
     ctx.plan = plan
     await ctx.writer.save_plan(plan.model_dump())
     await ctx.writer.emit("coordinator", "plan", "Research plan", plan.model_dump())
     goto: Literal["supervise", "report"] = "supervise" if plan.in_scope else "report"
-    return Command(update={"plan": plan.model_dump(), "rounds": {"extraction": 0, "analytics": 0}}, goto=goto)
+    return Command(update={"plan": plan.model_dump(), "rounds": rounds}, goto=goto)
+
+
+async def clarify(
+    state: GraphState, runtime: Runtime[AgentContext]
+) -> Command[Literal["interpret", "supervise", "report"]]:
+    """Pause for the researcher. On resume this node restarts and interrupt() returns the answer, so
+    nothing with side effects may come before it."""
+    plan = _plan(state)
+    response = interrupt(
+        {
+            "question": plan.clarification_question,
+            "options": plan.clarification_options,
+            "assumptions": plan.assumptions,
+        }
+    )
+    if response.get("proceed"):
+        proceeded = plan.model_copy(
+            update={"assumptions": [*plan.assumptions, "The researcher chose to proceed without clarifying."]}
+        )
+        return await _adopt_plan(runtime.context, proceeded, state["rounds"])
+    return Command(update={"clarification": str(response["answer"]), "clarified": True}, goto="interpret")
 
 
 def _evidence_summary(ctx: AgentContext, rounds: dict[str, int]) -> dict[str, Any]:
@@ -136,6 +175,7 @@ async def supervise(
     state: GraphState, runtime: Runtime[AgentContext]
 ) -> Command[Literal["extraction", "analytics", "report"]]:
     ctx = runtime.context
+    await ctx.check_cancel()
     rounds = state["rounds"]
     if all(rounds[a] >= n for a, n in MAX_ROUNDS.items()):
         return Command(goto="report")
@@ -169,6 +209,7 @@ async def supervise(
 
 async def extraction(state: GraphState, runtime: Runtime[AgentContext]) -> Command[Literal["supervise"]]:
     ctx = runtime.context
+    await ctx.check_cancel()
     plan = _plan(state)
     task = f"Research plan: {json.dumps(state['plan'])}\nObjective from the Coordinator: {state['objective']}"
     outcome = await run_react(
@@ -186,11 +227,12 @@ async def extraction(state: GraphState, runtime: Runtime[AgentContext]) -> Comma
         "Back to Coordinator",
         {"stop_reason": outcome.stop_reason, "selected": list(ctx.evidence.selected)},
     )
-    return Command(update={"rounds": rounds}, goto="supervise")
+    return Command(update={"rounds": rounds, "evidence": to_refs(ctx.evidence)}, goto="supervise")
 
 
 async def analytics(state: GraphState, runtime: Runtime[AgentContext]) -> Command[Literal["supervise"]]:
     ctx = runtime.context
+    await ctx.check_cancel()
     plan = _plan(state)
     done = [
         f"{c.id}: {c.text} -> {[a.computation_id for a in c.assertions.values()]}"
@@ -216,11 +258,12 @@ async def analytics(state: GraphState, runtime: Runtime[AgentContext]) -> Comman
         "Back to Coordinator",
         {"stop_reason": outcome.stop_reason, "claims_verified": len(ctx.evidence.verified_claims())},
     )
-    return Command(update={"rounds": rounds}, goto="supervise")
+    return Command(update={"rounds": rounds, "evidence": to_refs(ctx.evidence)}, goto="supervise")
 
 
 async def report(state: GraphState, runtime: Runtime[AgentContext]) -> dict[str, Any]:
     ctx = runtime.context
+    await ctx.check_cancel()
     plan = _plan(state)
     narrative: ReportNarrative | None = None
     removed: list[dict[str, str]] = []
@@ -323,13 +366,15 @@ async def _checked_narrative(
     ), removed
 
 
-def build_graph() -> Any:
+def build_graph(checkpointer: Any = None) -> Any:
+    """`checkpointer` persists progress (resume after a crash, pause for clarification)."""
     builder = StateGraph(GraphState, context_schema=AgentContext)
     builder.add_node("interpret", interpret)
+    builder.add_node("clarify", clarify)
     builder.add_node("supervise", supervise)
     builder.add_node("extraction", extraction)
     builder.add_node("analytics", analytics)
     builder.add_node("report", report)
     builder.add_edge(START, "interpret")
     builder.add_edge("report", END)
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)

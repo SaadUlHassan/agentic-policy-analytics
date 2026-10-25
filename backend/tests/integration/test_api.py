@@ -120,3 +120,60 @@ async def test_client_resuming_after_the_terminal_event_is_closed_not_left_waiti
         pytest.raises(WebSocketDisconnect),
     ):
         ws.receive_json()
+
+
+async def test_clarify_answers_once_then_409s_and_get_shows_the_question(client, sessions):
+    analysis_id, writer = await _running_analysis(sessions, [])
+    version = await writer.pause(
+        "i-1", {"question": "Which sector?", "options": ["ICT", "Finance"]}, active_ms=5
+    )
+    detail = client.get(f"/api/analyses/{analysis_id}").json()
+    assert detail["status"] == "awaiting_input"
+    assert (
+        detail["clarification"]["question"] == "Which sector?"
+        and detail["clarification"]["version"] == version
+    )
+
+    both = client.post(
+        f"/api/analyses/{analysis_id}/clarify",
+        json={"clarification_version": version, "answer": "ICT", "proceed_with_assumptions": True},
+    )
+    assert both.status_code == 422
+    ok = client.post(
+        f"/api/analyses/{analysis_id}/clarify", json={"clarification_version": version, "answer": "ICT"}
+    )
+    assert ok.status_code == 202 and ok.json()["status"] == "queued"
+    again = client.post(
+        f"/api/analyses/{analysis_id}/clarify", json={"clarification_version": version, "answer": "ICT"}
+    )
+    assert again.status_code == 409 and again.json()["code"] == "CLARIFICATION_STALE"
+    assert client.get(f"/api/analyses/{analysis_id}").json()["clarification"] is None
+
+
+def test_clarify_and_cancel_unknown_analysis_are_404(client):
+    for path, body in (
+        ("clarify", {"clarification_version": 1, "proceed_with_assumptions": True}),
+        ("cancel", None),
+    ):
+        resp = client.post(f"/api/analyses/missing/{path}", json=body)
+        assert resp.status_code == 404 and resp.json()["code"] == "ANALYSIS_NOT_FOUND"
+
+
+def test_cancel_queued_then_already_terminal(client):
+    analysis_id = client.post("/api/analyses", json={"query": "Analyse ICT employment"}).json()["id"]
+    first = client.post(f"/api/analyses/{analysis_id}/cancel")
+    assert first.status_code == 202 and first.json()["status"] == "cancelled"
+    second = client.post(f"/api/analyses/{analysis_id}/cancel")
+    assert second.status_code == 409 and second.json()["code"] == "ALREADY_TERMINAL"
+    assert client.get(f"/api/analyses/{analysis_id}").json()["status"] == "cancelled"
+
+
+async def test_cancel_running_is_a_request(client, sessions):
+    analysis_id, _ = await _running_analysis(sessions, [])
+    resp = client.post(f"/api/analyses/{analysis_id}/cancel")
+    assert resp.status_code == 202 and resp.json() == {
+        "id": analysis_id,
+        "status": "running",
+        "cancel_requested": True,
+    }
+    assert client.get(f"/api/analyses/{analysis_id}").json()["cancel_requested"] is True
