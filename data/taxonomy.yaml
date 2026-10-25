@@ -1,0 +1,25 @@
+# Industry taxonomy used to identify source series (plan §4.3).
+#
+# Each sector has a stable key, the SSIC code it denotes where a source states it, its parent,
+# and the source labels observed for it. Labels are matched after normalisation (lower case,
+# collapsed whitespace, "&" -> "and"); only the aliases below count as the same sector.
+# A parent and its child are always different sectors and are never merged.
+version: 1
+
+schemes:
+  SSIC2020:
+    total:            {label: "All industries", aliases: ["total", "total changes in employment"]}
+    goods_producing:  {label: "Goods-producing industries", parent: total, aliases: ["goods producing industries"]}
+    services:         {label: "Services", parent: total, aliases: ["services", "services producing industries"]}
+    manufacturing:    {label: "Manufacturing", code: C, parent: goods_producing, aliases: ["manufacturing"]}
+    construction:     {label: "Construction", code: F, parent: goods_producing, aliases: ["construction"]}
+    wholesale_retail: {label: "Wholesale & Retail Trade", code: G, parent: services, aliases: ["wholesale and retail trade"]}
+    transport_storage: {label: "Transportation & Storage", code: H, parent: services, aliases: ["transportation and storage"]}
+    accommodation_food: {label: "Accommodation & Food Services", code: I, parent: services, aliases: ["accommodation and food services"]}
+    info_comms:       {label: "Information & Communications", code: J, parent: services, aliases: ["information and communications"]}
+    it_info_services: {label: "IT & Other Information Services", code: J62-63, parent: info_comms, aliases: ["it and other information services"]}
+    telecom_broadcast_publishing: {label: "Telecommunications, Broadcasting & Publishing", parent: info_comms, aliases: ["telecommunications, broadcasting and publishing"]}
+    finance_insurance: {label: "Financial & Insurance Services", code: K, parent: services, aliases: ["financial and insurance services"]}
+    real_estate:      {label: "Real Estate Services", code: L, parent: services, aliases: ["real estate services"]}
+    professional:     {label: "Professional Services", code: M, parent: services, aliases: ["professional services"]}
+    admin_support:    {label: "Administrative & Support Services", code: N, parent: services, aliases: ["administrative and support services"]}

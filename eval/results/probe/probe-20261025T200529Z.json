@@ -1,0 +1,168 @@
+{
+  "generated_at": "20261025T200529Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "apac.amazon.nova-pro-v1:0",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 898,
+          "detail": null,
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "total_tokens": 10,
+            "input_token_details": {
+              "cache_creation": 0,
+              "cache_read": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1267,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_9jMJ9COtEAjvkXP75cZcmS",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 1456,
+          "detail": {
+            "intent": "Analyse employment trends in the technology sector from 2020-2024",
+            "sector": "SSIC 2020 Section J Information & Communications",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "job vacancies"
+            ],
+            "needs_clarification": false,
+            "rationale": "This plan aims to provide insights into the employment dynamics within the technology sector over a five-year period. Understanding these trends is crucial for policymakers, industry stakeholders, and job seekers to make informed decisions and adapt to the evolving job market in the technology sector."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 2703,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_ZdfjyY19pnadcKy77WU7mM",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": true,
+            "final_text": "[{'type': 'reasoning_content', 'reasoning_content': {'text': 'The tool result provides metadata about the series but does not include the actual data. I need to fetch the actual data for the years 2020 to 2024.'}}, {'type': 'tool_use', 'name': 'fetch_singstat_series', 'input': {'series_no': '3.4', 'table_id': 'M182841'}, 'id': 'tooluse_IjD4Ahnm6uxGYrHlGNP3UN'}]"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 818,
+          "detail": {
+            "chunks": 15,
+            "first_chunk_ms": 725,
+            "text": "[][{\"type\": \"text\", \"text\": \"Sure\", \"index\": 0}][{\"type\": \"text\", \"text\": \", here are\", \"index\": 0}][{\"type\": \"text\", \"text\": \" the numbers from\", \"index\": 0}][{\"type\": \"text\", \"text\": \" 1 to 5,\", \"in"
+          }
+        }
+      },
+      "all_pass": true
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 1583,
+          "detail": null,
+          "usage": {
+            "input_tokens": 13,
+            "output_tokens": 17,
+            "total_tokens": 30,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 7
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1395,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_tmtdyPc7MD20b61sVWT8OrXd",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 4058,
+          "detail": {
+            "intent": "Analyse how employment in Singapore's technology sector changed annually from 2020 to 2024.",
+            "sector": "Technology sector, assumed to correspond to SSIC 2020 Section J: Information & Communications.",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "Employment level",
+              "Year-on-year employment change",
+              "Annual employment growth rate",
+              "Share of total employment"
+            ],
+            "needs_clarification": false,
+            "rationale": "The request asks for employment trends over 2020\u20132024, so the plan focuses on annual employment levels and changes across that period. As an operational assumption, 'technology sector' is mapped to SSIC 2020 Section J: Information & Communications to make the sector definition measurable using official industry classifications."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 9559,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_myKPIqcNnI8lWPKP4DkGB1v8",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": false,
+            "final_text": "Fetched the required SingStat series for analysing Singapore technology-sector employment trends.\n\n- **Source:** SingStat Table Builder, Table **M182841**\n- **Series:** **3.4 \u2014 Information And Communications**\n- **Measure:** Year-end employment by sector\n- **Unit:** Thousand persons\n- **Period needed:** 2020\u20132024\n- **Computation reference:** `c1`\n\nUse the fetched series to analyse:\n- Employment level in each year: `{{c1.values}}`\n- Change from 2020 to 2024: `{{c1.change}}`\n- Percentage change fr"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1135,
+          "detail": {
+            "chunks": 13,
+            "first_chunk_ms": 1053,
+            "text": "1\n2\n3\n4\n5"
+          }
+        }
+      },
+      "all_pass": true
+    }
+  ]
+}

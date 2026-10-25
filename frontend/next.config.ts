@@ -2,8 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components are not used: every page shows live, per-analysis data rendered on request.
   turbopack: {
     rules: {
       "*.css": {

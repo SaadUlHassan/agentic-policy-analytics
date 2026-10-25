@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from collections.abc import Callable
@@ -23,19 +22,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from botocore.config import Config
-from langchain_aws import ChatBedrockConverse
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "eval" / "results" / "probe"
 
 sys.path.insert(0, str(REPO_ROOT / "backend"))
-from app.core.config import Settings, get_settings  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
+from app.llm.providers import build_bedrock, build_openai  # noqa: E402
+from app.llm.router import normalise  # noqa: E402
 
 
 @tool
@@ -59,9 +57,11 @@ class ResearchPlan(BaseModel):
 QUERY = "Analyse employment trends in the technology sector from 2020-2024"
 
 # Deliberately carries no numbers: the probe checks that the model can consume an
-# observation and continue, not the accuracy of any statistic.
+# observation and finish with an answer, not the accuracy of any statistic.
 OBSERVATION = json.dumps(
     {
+        "instruction": "This is all the data available in this check. Reply with a short final answer "
+        "describing your next analysis step; do not call any more tools.",
         "table_id": "M182841",
         "series": "Information And Communications",
         "unit": "Thousand",
@@ -69,22 +69,6 @@ OBSERVATION = json.dumps(
         "note": "Numbers must be referenced via placeholders such as {{c1.pct_change}}; do not type numbers.",
     }
 )
-
-
-def build_bedrock(model_id: str, settings: Settings) -> BaseChatModel:
-    if settings.aws_bedrock_api_key:
-        # botocore reads Bedrock API keys from this variable.
-        os.environ["AWS_BEARER_TOKEN_BEDROCK"] = settings.aws_bedrock_api_key.get_secret_value()
-    # total_max_attempts=1 => exactly one HTTP request (max_attempts=1 would allow a retry).
-    cfg = Config(retries={"total_max_attempts": 1, "mode": "standard"}, read_timeout=60, connect_timeout=10)
-    return ChatBedrockConverse(
-        model=model_id, region_name=settings.aws_bedrock_region, config=cfg, temperature=0, max_tokens=800
-    )
-
-
-def build_openai(model_id: str, settings: Settings) -> BaseChatModel:
-    key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
-    return ChatOpenAI(model=model_id, api_key=key, max_retries=0, timeout=60, max_tokens=800)
 
 
 def timed(fn: Callable[[], Any]) -> tuple[bool, float, Any]:
@@ -98,6 +82,30 @@ def timed(fn: Callable[[], Any]) -> tuple[bool, float, Any]:
 
 def usage_of(msg: Any) -> dict | None:
     return getattr(msg, "usage_metadata", None)
+
+
+MAX_REACT_ROUNDS = 3
+
+
+def react_turn(model: Any, history: list[BaseMessage], max_rounds: int = MAX_REACT_ROUNDS) -> dict:
+    """Reason -> Action -> Observation -> answer. Passes only on a completed, non-empty answer: every
+    further tool call gets the observation again, and the turn fails if no answer comes within
+    `max_rounds` tool rounds."""
+    messages = list(history)
+    first_action = None
+    for round_no in range(1, max_rounds + 1):
+        reply = model.invoke(messages)
+        messages.append(reply)
+        if not reply.tool_calls:
+            answer = str(normalise(reply).content)  # visible text only, never private reasoning blocks
+            if round_no == 1:
+                raise RuntimeError("answered without calling a tool first")
+            if not answer.strip():
+                raise RuntimeError("empty final answer")
+            return {"action": first_action, "tool_rounds": round_no - 1, "final_text": answer[:500]}
+        first_action = first_action or reply.tool_calls[0]
+        messages += [ToolMessage(OBSERVATION, tool_call_id=call["id"]) for call in reply.tool_calls]
+    raise RuntimeError(f"no final answer after {max_rounds} tool rounds")
 
 
 def probe_model(provider: str, model_id: str, llm: BaseChatModel) -> dict:
@@ -145,19 +153,7 @@ def probe_model(provider: str, model_id: str, llm: BaseChatModel) -> dict:
         "detail": out.model_dump() if is_plan else str(out),
     }
 
-    def react_turn() -> dict:
-        first = with_tools.invoke([system, human])
-        if not first.tool_calls:
-            raise RuntimeError("no tool call in first step")
-        call = first.tool_calls[0]
-        final = with_tools.invoke([system, human, first, ToolMessage(OBSERVATION, tool_call_id=call["id"])])
-        return {
-            "action": call,
-            "final_has_tool_calls": bool(final.tool_calls),
-            "final_text": str(final.content)[:500],
-        }
-
-    ok, ms, out = timed(react_turn)
+    ok, ms, out = timed(lambda: react_turn(with_tools, [system, human]))
     checks["react_turn"] = {"pass": ok, "ms": ms, "detail": out}
 
     def stream() -> dict:
@@ -191,7 +187,7 @@ def main() -> int:
     ):
         for model_id in model_ids:
             print(f"probing {provider}:{model_id} ...", flush=True)
-            results.append(probe_model(provider, model_id, build(model_id, settings)))
+            results.append(probe_model(provider, model_id, build(settings, model_id)))
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
