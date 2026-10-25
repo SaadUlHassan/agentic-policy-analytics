@@ -46,7 +46,7 @@ jobs:
         run: uv run ruff check . ../scripts && uv run ruff format --check . ../scripts
       - name: Type check
         run: uv run mypy app
-      - name: Unit and integration tests (offline: snapshots + scripted LLM; live tests excluded)
+      - name: "Unit and integration tests (offline: snapshots + scripted LLM; live tests excluded)"
         run: uv run pytest --cov --cov-report=xml --cov-report=term-missing:skip-covered
       - uses: actions/upload-artifact@v4
         if: always()
