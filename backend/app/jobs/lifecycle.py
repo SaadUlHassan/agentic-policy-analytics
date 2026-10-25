@@ -17,6 +17,8 @@ GRAPH_VERSION = "1"
 PROMPT_VERSION = "1"
 LEASE_TTL = timedelta(seconds=60)
 REDELIVER_AFTER = timedelta(seconds=60)
+# A running execution adds its active time at every heartbeat, so a crash loses at most one interval.
+HEARTBEAT_INTERVAL = timedelta(seconds=15)
 MAX_ATTEMPTS = 3
 
 
@@ -143,14 +145,18 @@ async def claim(
         )
 
 
-async def renew_lease(sessions: async_sessionmaker[AsyncSession], analysis_id: str, epoch: int) -> bool:
+async def renew_lease(
+    sessions: async_sessionmaker[AsyncSession], analysis_id: str, epoch: int, active_ms: int = 0
+) -> bool:
+    """Extend the lease and add the active time spent since the previous renewal."""
     async with sessions() as session:
         result = await session.execute(
             text(
-                "UPDATE analyses SET lease_expires_at = now() + :ttl, heartbeat_at = now() "
+                "UPDATE analyses SET lease_expires_at = now() + :ttl, heartbeat_at = now(), "
+                "active_ms_used = active_ms_used + :ms "
                 "WHERE id = :id AND execution_epoch = :epoch AND status = 'running' RETURNING id"
             ),
-            {"id": analysis_id, "epoch": epoch, "ttl": LEASE_TTL},
+            {"id": analysis_id, "epoch": epoch, "ttl": LEASE_TTL, "ms": active_ms},
         )
         renewed = result.first() is not None
         await session.commit()
@@ -214,11 +220,11 @@ async def submit_clarification(
         row = (
             await session.execute(
                 text(
-                    "UPDATE analyses SET status = 'queued', pending_interrupt_id = NULL, "
+                    "UPDATE analyses SET status = 'queued', "
                     "clarification_version = clarification_version + 1, row_version = row_version + 1, "
                     "last_event_seq = last_event_seq + 1 "
                     "WHERE id = :id AND status = 'awaiting_input' AND clarification_version = :v "
-                    "RETURNING last_event_seq"
+                    "RETURNING last_event_seq, pending_interrupt_id"
                 ),
                 {"id": analysis_id, "v": version},
             )
@@ -228,9 +234,32 @@ async def submit_clarification(
             raise await _conflict_for(session, analysis_id, version)
         title = "Proceeding with stated assumptions" if response.get("proceed") else "Researcher answered"
         await _append_event(session, analysis_id, row.last_event_seq, title, {"status": "queued", **response})
-        session.add(OutboxIntent(analysis_id=analysis_id, kind="resume", payload={"clarification": response}))
+        # The answer is keyed by the interrupt it answers, so any later resume of that interrupt
+        # (including one after this intent's worker crashed) finds it: see accepted_answer().
+        session.add(
+            OutboxIntent(
+                analysis_id=analysis_id,
+                kind="resume",
+                payload={"clarification": response, "interrupt_id": row.pending_interrupt_id},
+            )
+        )
         await session.commit()
         return Transition(AnalysisStatus.QUEUED.value, row.last_event_seq)
+
+
+async def accepted_answer(
+    sessions: async_sessionmaker[AsyncSession], analysis_id: str, interrupt_id: str
+) -> dict[str, Any] | None:
+    """The researcher's accepted answer to this interrupt, if there is one."""
+    async with sessions() as session:
+        answer = await session.scalar(
+            text(
+                "SELECT payload->'clarification' FROM outbox WHERE analysis_id = :id "
+                "AND payload->>'interrupt_id' = :iid ORDER BY id DESC LIMIT 1"
+            ),
+            {"id": analysis_id, "iid": interrupt_id},
+        )
+    return answer
 
 
 async def request_cancel(sessions: async_sessionmaker[AsyncSession], analysis_id: str) -> Transition:
@@ -281,6 +310,7 @@ class Reconciled:
     redelivered: int = 0
     resumed: int = 0
     failed: int = 0
+    cancelled: int = 0
 
 
 async def reconcile(
@@ -294,8 +324,10 @@ async def reconcile(
 
     (b) An intent dispatched but never acknowledged (the job was lost before a worker claimed it) is
         re-dispatched under a new delivery generation. This does not count as an execution attempt.
-    (c) A running analysis whose lease expired (its worker died) gets a resume intent, or fails once
-        it has used its execution attempts. Failing bumps the epoch, so the old owner stays fenced.
+    (c) A running analysis whose lease expired (its worker died) gets a resume intent, and is
+        charged one heartbeat interval for the active time its worker never reported. It is
+        cancelled instead if that was requested, or fails once it has used its execution attempts.
+        Both bump the epoch, so the old owner stays fenced.
     (a) Undispatched intents, including those written here, are then dispatched.
     """
     async with sessions() as session:
@@ -315,35 +347,51 @@ async def reconcile(
         expired = (
             await session.execute(
                 text(
-                    "SELECT id, attempt FROM analyses a WHERE status = 'running' "
+                    "SELECT id, attempt, cancel_requested_at IS NOT NULL AS cancel FROM analyses a "
+                    "WHERE status = 'running' "
                     "AND lease_expires_at < now() AND NOT EXISTS (SELECT 1 FROM outbox o "
                     "WHERE o.analysis_id = a.id AND o.acked_at IS NULL AND o.superseded_at IS NULL) "
                     "FOR UPDATE SKIP LOCKED"
                 )
             )
         ).all()
-        resumed = failed = 0
-        for analysis_id, attempt in expired:
-            if attempt < max_attempts:
+        resumed = failed = cancelled = 0
+        for analysis_id, attempt, cancel in expired:
+            if cancel:
+                await _end(session, analysis_id, AnalysisStatus.CANCELLED)
+                cancelled += 1
+            elif attempt < max_attempts:
+                await session.execute(
+                    text("UPDATE analyses SET active_ms_used = active_ms_used + :ms WHERE id = :id"),
+                    {"id": analysis_id, "ms": int(HEARTBEAT_INTERVAL.total_seconds() * 1000)},
+                )
                 session.add(OutboxIntent(analysis_id=analysis_id, kind="resume", payload={}))
                 resumed += 1
-                continue
-            (seq,) = (
-                await session.execute(
-                    text(
-                        "UPDATE analyses SET status = 'failed', finished_at = now(), "
-                        "execution_epoch = execution_epoch + 1, lease_owner = NULL, lease_expires_at = NULL, "
-                        "error = CAST(:error AS JSONB), row_version = row_version + 1, "
-                        "last_event_seq = last_event_seq + 1 WHERE id = :id RETURNING last_event_seq"
-                    ),
-                    {"id": analysis_id, "error": json.dumps(_exhausted(attempt))},
-                )
-            ).one()
-            await _append_event(session, analysis_id, seq, "Analysis failed", {"status": "failed"})
-            failed += 1
+            else:
+                await _end(session, analysis_id, AnalysisStatus.FAILED, _exhausted(attempt))
+                failed += 1
         await session.commit()
     dispatched = await dispatch_pending(sessions, queue)
-    return Reconciled(dispatched, len(redelivered.all()), resumed, failed)
+    return Reconciled(dispatched, len(redelivered.all()), resumed, failed, cancelled)
+
+
+async def _end(
+    session: AsyncSession, analysis_id: str, status: AnalysisStatus, error: dict[str, Any] | None = None
+) -> None:
+    """Finish an analysis whose worker is gone, fencing that worker by bumping the epoch."""
+    (seq,) = (
+        await session.execute(
+            text(
+                "UPDATE analyses SET status = :status, finished_at = now(), "
+                "execution_epoch = execution_epoch + 1, lease_owner = NULL, lease_expires_at = NULL, "
+                "error = CAST(:error AS JSONB), row_version = row_version + 1, "
+                "last_event_seq = last_event_seq + 1 WHERE id = :id RETURNING last_event_seq"
+            ),
+            {"id": analysis_id, "status": status.value, "error": json.dumps(error) if error else None},
+        )
+    ).one()
+    title = f"Analysis {status.value}"
+    await _append_event(session, analysis_id, seq, title, {"status": status.value})
 
 
 def _exhausted(attempts: int) -> dict[str, Any]:

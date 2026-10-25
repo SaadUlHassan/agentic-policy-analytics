@@ -193,9 +193,10 @@ async def test_clarification_queues_one_resume_and_a_duplicate_is_stale(sessions
         await submit_clarification(sessions, analysis_id, version, {"answer": "ICT"})
     assert duplicate.value.code == "CLARIFICATION_STALE"
     (resume,) = await _open_intents(sessions, analysis_id)
-    assert resume.kind == "resume" and resume.payload == {"clarification": {"answer": "ICT"}}
-    row = await _row(sessions, analysis_id)
-    assert row.status == "queued" and row.pending_interrupt_id is None
+    # Keyed by the interrupt it answers, so a later resume of that interrupt can always find it.
+    assert resume.kind == "resume"
+    assert resume.payload == {"clarification": {"answer": "ICT"}, "interrupt_id": "interrupt-1"}
+    assert (await _row(sessions, analysis_id)).status == "queued"
 
 
 async def test_concurrent_duplicate_clarifications_resume_once(sessions):
@@ -258,3 +259,29 @@ async def test_cancel_queued_now_running_on_request_terminal_409(sessions):
     with pytest.raises(LifecycleConflict) as terminal:
         await request_cancel(sessions, queued_id)
     assert terminal.value.code == "ALREADY_TERMINAL"
+
+
+async def test_expired_lease_with_cancel_requested_is_cancelled_not_resumed(sessions):
+    analysis_id, intent = await _new(sessions)
+    c = await claim(sessions, analysis_id, intent, "crashed-worker")
+    await request_cancel(sessions, analysis_id)
+    await _expire_lease(sessions, analysis_id)
+
+    result = await reconcile(sessions, FakeQueue())
+
+    assert result.cancelled == 1 and result.resumed == 0
+    assert (await _row(sessions, analysis_id)).status == "cancelled"
+    with pytest.raises(LeaseLost):
+        await FencedWriter(sessions, None, analysis_id, c.epoch).emit("system", "status", "stale")
+
+
+async def test_recovery_charges_the_unreported_heartbeat_interval(sessions):
+    analysis_id, intent = await _new(sessions)
+    c = await claim(sessions, analysis_id, intent, "crashed-worker")
+    assert await renew_lease(sessions, analysis_id, c.epoch, active_ms=30_000)  # two heartbeats' worth
+    await _expire_lease(sessions, analysis_id)
+
+    await reconcile(sessions, FakeQueue())
+
+    # 30 s reported, plus at most one interval the worker ran before dying without reporting.
+    assert (await _row(sessions, analysis_id)).active_ms_used == 30_000 + 15_000

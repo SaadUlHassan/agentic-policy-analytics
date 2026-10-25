@@ -166,22 +166,28 @@ class FencedWriter:
         error: dict[str, Any] | None = None,
         *,
         active_ms: int = 0,
-    ) -> None:
+    ) -> AnalysisStatus:
         """Commit the report, the terminal status and the terminal event in one transaction.
 
         Readers treat the terminal event as "the report is stored". Committing them together means a
         reader can never see the terminal status without the event (and close too early), or the event
-        without the report."""
+        without the report.
+
+        A cancel request that reached the row first wins: the outcome is then "cancelled" and the
+        report is discarded. The row lock taken here orders this against a concurrent cancel."""
         assert status in TERMINAL_STATUSES
         async with self.sessions() as session:
-            await self._fence(
+            (final,) = await self._fence(
                 session,
-                "status = :status, finished_at = now(), lease_owner = NULL, "
-                "lease_expires_at = NULL, error = CAST(:error AS JSONB), row_version = row_version + 1, "
-                "active_ms_used = active_ms_used + :ms",
+                "status = CASE WHEN cancel_requested_at IS NULL THEN :status ELSE 'cancelled' END, "
+                "finished_at = now(), lease_owner = NULL, lease_expires_at = NULL, "
+                "error = CASE WHEN cancel_requested_at IS NULL THEN CAST(:error AS JSONB) END, "
+                "row_version = row_version + 1, active_ms_used = active_ms_used + :ms",
                 {"status": status.value, "error": _json(error), "ms": active_ms},
+                returning="status",
             )
-            if report is not None:
+            final = AnalysisStatus(final)
+            if report is not None and final == status:
                 await session.execute(
                     insert(ReportRow)
                     .values(analysis_id=self.analysis_id, content=report)
@@ -191,35 +197,46 @@ class FencedWriter:
                 session,
                 "system",
                 "status",
-                f"Analysis {status.value.replace('_', ' ')}",
-                {"status": status.value},
+                f"Analysis {final.value.replace('_', ' ')}",
+                {"status": final.value},
             )
             await session.commit()
         await self._publish(seq)
+        return final
 
-    async def pause(self, interrupt_id: str, question: dict[str, Any], *, active_ms: int) -> int:
+    async def pause(self, interrupt_id: str, question: dict[str, Any], *, active_ms: int) -> int | None:
         """Wait for the researcher: release the lease (the worker slot is freed), stop the active-time
         clock and announce the question, all in one transaction. Returns the clarification version
-        an answer must quote."""
+        an answer must quote, or None if a cancel request arrived first and the analysis was
+        cancelled instead."""
         async with self.sessions() as session:
-            (version,) = await self._fence(
+            version, status = await self._fence(
                 session,
-                "status = 'awaiting_input', clarification_version = clarification_version + 1, "
-                "pending_interrupt_id = :iid, lease_owner = NULL, lease_expires_at = NULL, "
+                "status = CASE WHEN cancel_requested_at IS NULL THEN 'awaiting_input' ELSE 'cancelled' END, "
+                "finished_at = CASE WHEN cancel_requested_at IS NULL THEN NULL ELSE now() END, "
+                "clarification_version = clarification_version "
+                "    + CASE WHEN cancel_requested_at IS NULL THEN 1 ELSE 0 END, "
+                "pending_interrupt_id = CASE WHEN cancel_requested_at IS NULL THEN :iid END, "
+                "lease_owner = NULL, lease_expires_at = NULL, "
                 "active_ms_used = active_ms_used + :ms, row_version = row_version + 1",
                 {"iid": interrupt_id, "ms": active_ms},
-                returning="clarification_version",
+                returning="clarification_version, status",
             )
-            seq = await self._append_event(
-                session,
-                "coordinator",
-                "clarification",
-                "Question for the researcher",
-                {**question, "version": version},
-            )
+            if status == AnalysisStatus.CANCELLED:
+                seq = await self._append_event(
+                    session, "system", "status", "Analysis cancelled", {"status": status}
+                )
+            else:
+                seq = await self._append_event(
+                    session,
+                    "coordinator",
+                    "clarification",
+                    "Question for the researcher",
+                    {**question, "version": version},
+                )
             await session.commit()
         await self._publish(seq)
-        return int(version)
+        return None if status == AnalysisStatus.CANCELLED else int(version)
 
 
 def _json(value: Any) -> str | None:

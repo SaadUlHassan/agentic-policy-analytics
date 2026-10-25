@@ -929,12 +929,21 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **Clarification is its own graph node**, so answering resumes at the question without repeating the planning call.
   - An answer re-plans once with the researcher's text. "Proceed" adopts the plan and records the assumption.
 - **The question version is bumped on pause and again on acceptance.** A duplicate answer is therefore `CLARIFICATION_STALE`, not a second resume.
+- **An accepted answer is keyed by the interrupt it answers.** Every resume looks for an answer to the pending interrupt, so the answer survives a crash of the worker that first claimed it.
+  - Once the checkpoint records the answer, the interrupt is no longer pending and the answer is not applied twice.
+  - If the worker crashed before the question was shown, the resumed run asks it again.
 - **Cancellation takes precedence over an answer.** Cancelling a queued or paused analysis supersedes its open intents, and a claim only succeeds on a queued or running analysis, so a queued answer can never resume a cancelled run.
   - A running analysis stops at the next node or tool-call boundary.
+  - The final transitions (pause, finish) re-check `cancel_requested_at` under the row lock that decides them. A cancel arriving after the last boundary therefore still wins, and the report is discarded.
+  - An expired lease with a pending cancel is cancelled by the reconciler, not resumed.
 - **The reconciler runs every 15 s in every worker.** It replaces the 5 s dispatch cron.
   - Concurrent passes are safe: row locks plus `SKIP LOCKED`.
   - When a run fails for exhausted attempts, the epoch is bumped, so a late original worker stays fenced.
-- **Only active time counts against the deadline.** `active_ms_used` accumulates at each pause and finish, and a resume gets the remainder.
+- **Only active time counts against the deadline.**
+  - Each heartbeat (15 s) adds the active time since the last one. Pause and finish add the remainder.
+  - Reports are serialised, and an interval counts as reported only once its write commits. The final pause or finish therefore waits for an in-flight heartbeat rather than racing it.
+  - When a crashed run is recovered, it is charged one more interval for time its worker never reported, so recovery cannot grant extra budget.
+  - A resume gets what remains.
 
 **Verified live:**
 - An analysis left `running` by an earlier stack rebuild was resumed at worker startup.

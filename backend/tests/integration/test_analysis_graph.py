@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
+from types import SimpleNamespace
 
 import botocore.exceptions
 import pytest
@@ -14,7 +16,7 @@ from app.core.config import Settings
 from app.db.models import OutboxIntent, ReportRow
 from app.events.stream import events_after
 from app.jobs import runner
-from app.jobs.lifecycle import create_analysis, reconcile, request_cancel, submit_clarification
+from app.jobs.lifecycle import claim, create_analysis, reconcile, request_cancel, submit_clarification
 from app.jobs.runner import execute
 from app.jobs.writer import FencedWriter
 from app.llm.scripted import ScriptedChatModel, tool_call
@@ -661,3 +663,229 @@ async def test_incompatible_checkpoint_fails_cleanly(sessions, database_url, che
         error = await session.scalar(text("SELECT error FROM analyses WHERE id = :id"), {"id": analysis_id})
     assert error["code"] == "INCOMPATIBLE_CHECKPOINT"
     assert (await _events(sessions, analysis_id))[-1]["detail"] == {"status": "failed"}
+
+
+async def test_cancel_arriving_just_before_the_pause_cancels(
+    sessions, database_url, checkpoints, monkeypatch
+):
+    analysis_id, intent = await _start(sessions)
+    real_pause = FencedWriter.pause
+
+    async def cancel_then_pause(self, *args, **kwargs):
+        await request_cancel(sessions, analysis_id)  # after the last step boundary, before the commit
+        return await real_pause(self, *args, **kwargs)
+
+    monkeypatch.setattr(FencedWriter, "pause", cancel_then_pause)
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models={"bedrock": ScriptedChatModel(replies=[tool_call("ResearchPlan", AMBIGUOUS_PLAN)])},
+    )
+
+    assert status == "cancelled"
+    async with sessions() as session:
+        row = (
+            await session.execute(
+                text("SELECT status, lease_owner, pending_interrupt_id FROM analyses WHERE id = :id"),
+                {"id": analysis_id},
+            )
+        ).one()
+    assert tuple(row) == ("cancelled", None, None)
+    events = await _events(sessions, analysis_id)
+    assert events[-1]["detail"] == {"status": "cancelled"}
+    assert "clarification" not in [e["type"] for e in events]
+
+
+async def test_cancel_during_the_report_step_discards_the_report(
+    sessions, database_url, checkpoints, monkeypatch
+):
+    analysis_id, intent = await _start(sessions)
+    real_emit = FencedWriter.emit
+
+    async def emit_then_cancel(self, agent, type, title, detail=None):
+        seq = await real_emit(self, agent, type, title, detail)
+        if type == "report":  # the last step boundary has passed
+            await request_cancel(sessions, analysis_id)
+        return seq
+
+    monkeypatch.setattr(FencedWriter, "emit", emit_then_cancel)
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models={
+            "bedrock": ScriptedChatModel(replies=_happy_path_script()),
+            "openai": ScriptedChatModel(replies=[ALL_SUPPORTED]),
+        },
+    )
+
+    assert status == "cancelled"
+    async with sessions() as session:
+        report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+    assert report is None
+    assert (await _events(sessions, analysis_id))[-1]["detail"] == {"status": "cancelled"}
+
+
+async def test_accepted_answer_survives_a_crash_before_the_graph_resumes(sessions, database_url, checkpoints):
+    analysis_id, version = await _pause_for_clarification(sessions, database_url, checkpoints)
+    await submit_clarification(sessions, analysis_id, version, {"answer": "Information & Communications"})
+    # A worker claims the answer and dies before the graph records it.
+    assert await claim(sessions, analysis_id, await _resume_intent(sessions, analysis_id), "killed")
+    await _expire_lease(sessions, analysis_id)
+    assert (await reconcile(sessions, FakeQueue())).resumed == 1
+
+    planner = ScriptedChatModel(replies=_happy_path_script())
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        await _resume_intent(sessions, analysis_id),  # the reconciler's intent carries no answer
+        "recovery",
+        checkpoints=checkpoints,
+        models={"bedrock": planner, "openai": ScriptedChatModel(replies=[ALL_SUPPORTED])},
+    )
+
+    assert status == "completed"
+    assert "The researcher clarified: Information & Communications" in str(planner.calls[0][-1].content)
+    assert [e["type"] for e in await _events(sessions, analysis_id)].count("clarification") == 1
+
+
+async def test_crash_before_the_pause_commits_asks_again(sessions, database_url, checkpoints, monkeypatch):
+    analysis_id, intent = await _start(sessions)
+
+    async def die(self, *args, **kwargs):
+        raise WorkerKilled
+
+    monkeypatch.setattr(FencedWriter, "pause", die)
+    with pytest.raises(WorkerKilled):
+        await execute(
+            sessions,
+            None,
+            _settings(database_url),
+            analysis_id,
+            intent,
+            "killed",
+            checkpoints=checkpoints,
+            models={"bedrock": ScriptedChatModel(replies=[tool_call("ResearchPlan", AMBIGUOUS_PLAN)])},
+        )
+    monkeypatch.undo()
+    await _expire_lease(sessions, analysis_id)
+    await reconcile(sessions, FakeQueue())
+
+    # The question was never shown, so the resumed run raises it again rather than inventing an answer.
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        await _resume_intent(sessions, analysis_id),
+        "recovery",
+        checkpoints=checkpoints,
+        models={},
+    )
+    assert status == "awaiting_input"
+
+
+async def test_crashed_execution_time_is_charged_on_resume(sessions, database_url, checkpoints, monkeypatch):
+    analysis_id, intent = await _start(sessions)
+    clock = [time.monotonic()]
+    # Only the runner's clock is faked; the event loop keeps real time, so heartbeats still fire.
+    monkeypatch.setattr(runner, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(runner, "HEARTBEAT_S", 0.01)
+    real_save_plan = FencedWriter.save_plan
+
+    async def work_200s_then_die(self, plan):
+        await real_save_plan(self, plan)
+        clock[0] += 200  # 200 s of active work...
+        await asyncio.sleep(0.1)  # ...across which heartbeats keep reporting it
+        raise WorkerKilled
+
+    monkeypatch.setattr(FencedWriter, "save_plan", work_200s_then_die)
+    with pytest.raises(WorkerKilled):
+        await execute(
+            sessions,
+            None,
+            _settings(database_url),
+            analysis_id,
+            intent,
+            "killed",
+            checkpoints=checkpoints,
+            models={"bedrock": ScriptedChatModel(replies=[tool_call("ResearchPlan", PLAN)])},
+        )
+    monkeypatch.setattr(FencedWriter, "save_plan", real_save_plan)
+    await _expire_lease(sessions, analysis_id)
+    await reconcile(sessions, FakeQueue())
+
+    budgets: list[float] = []
+    real_context = runner.AgentContext
+
+    def recording_context(**kwargs):
+        budgets.append(kwargs["deadline"] - clock[0])
+        return real_context(**kwargs)
+
+    monkeypatch.setattr(runner, "AgentContext", recording_context)
+    await execute(
+        sessions,
+        None,
+        _settings(database_url, analysis_deadline_s=240),
+        analysis_id,
+        await _resume_intent(sessions, analysis_id),
+        "recovery",
+        checkpoints=checkpoints,
+        models={},
+    )
+    # 240 s budget - 200 s reported by heartbeats - 15 s charged for the unreported interval.
+    assert budgets == [pytest.approx(25, abs=0.5)]
+
+
+@pytest.mark.parametrize("plan", [AMBIGUOUS_PLAN, {**PLAN, "in_scope": False, "scope_note": "Not covered."}])
+async def test_heartbeat_in_flight_during_pause_or_finish_is_not_lost(
+    sessions, database_url, checkpoints, monkeypatch, plan
+):
+    """A heartbeat that has measured its interval but not yet committed it must not lose that time
+    when the run pauses (ambiguous plan) or finishes (out-of-scope plan) meanwhile."""
+    analysis_id, intent = await _start(sessions)
+    clock = [time.monotonic()]
+    monkeypatch.setattr(runner, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(runner, "HEARTBEAT_S", 0.01)
+    real_renew = runner.renew_lease
+
+    async def slow_renew(*args, active_ms=0, **kwargs):
+        if active_ms:
+            await asyncio.sleep(0.3)  # the write carrying the 100 s is still in flight as the run ends
+        return await real_renew(*args, active_ms=active_ms, **kwargs)
+
+    monkeypatch.setattr(runner, "renew_lease", slow_renew)
+
+    def plan_after_100s(messages):
+        clock[0] += 100  # 100 s of active work...
+        time.sleep(0.05)  # ...measured by a heartbeat while this reply is produced (executor thread)
+        return tool_call("ResearchPlan", plan)
+
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models={"bedrock": ScriptedChatModel(replies=[plan_after_100s])},
+    )
+
+    assert status in {"awaiting_input", "completed_with_limitations"}
+    async with sessions() as session:
+        active_ms = await session.scalar(
+            text("SELECT active_ms_used FROM analyses WHERE id = :id"), {"id": analysis_id}
+        )
+    assert 100_000 <= active_ms < 101_000
