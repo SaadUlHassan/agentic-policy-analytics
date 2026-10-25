@@ -56,7 +56,7 @@ def _claim_on_last(predicate: str, field: str, metric: str, series: str, start: 
             "draft_claim",
             {
                 "kind": "comparison",
-                "prose": prose,
+                "lead_in": prose,
                 "assertions": [
                     {
                         "predicate": predicate,
@@ -115,10 +115,10 @@ def _happy_path_script() -> list:
             "pct_change",
             "job_vacancies",
             VACANCIES,
-            "2020-Q1",
+            "2021-Q1",  # restates the 2020-Q1..2024-Q4 change over a shorter interval: must be rejected
             "2024-Q4",
-            "Due to digitalisation,",
-        ),  # fabricated figure + cause
+            "",
+        ),
         _claim_on_last(
             "change.increase",
             "pct_change",
@@ -126,7 +126,7 @@ def _happy_path_script() -> list:
             VACANCIES,
             "2020-Q1",
             "2024-Q4",
-            "Over the same years,",
+            "Over the same period,",
         ),
         act("finish", {"summary": "Two findings verified."}),
         tool_call("NextAction", {"action": "report", "objective": "Write the report", "rationale": "Done."}),
@@ -146,8 +146,9 @@ ALL_SUPPORTED = tool_call(
     "SupportVerdicts",
     {
         "verdicts": [
-            {"index": 0, "supported": True, "reason": "summarises findings"},
-            {"index": 1, "supported": True, "reason": "source rounding"},
+            {"index": 0, "supported": True, "reason": "names the findings' subject"},
+            {"index": 1, "supported": True, "reason": "summarises findings"},
+            {"index": 2, "supported": True, "reason": "source rounding"},
         ]
     },
 )
@@ -190,7 +191,7 @@ async def test_full_run_produces_a_verified_two_platform_report(sessions, databa
     assert texts == [
         "Employment level in Information & Communications grew at a compound rate of 3.4% a year "
         "between 2020 and 2024.",
-        "Over the same years, job vacancies in Information & Communications rose by 21.7% "
+        "Over the same period, job vacancies in Information & Communications rose by 21.7% "
         "between 2020-Q1 and 2024-Q4.",
     ]
     assert {c["platform"] for c in report["citations"]} == {"singstat", "datagov"}
@@ -228,14 +229,15 @@ async def test_full_run_produces_a_verified_two_platform_report(sessions, databa
     assert {e["agent"] for e in events} >= {"coordinator", "extraction", "analytics"}
 
 
-async def test_summary_the_judge_finds_unsupported_is_removed(sessions, database_url):
+async def test_title_and_summary_the_judge_finds_unsupported_are_removed(sessions, database_url):
     analysis_id, intent = await _start(sessions)
     judge = tool_call(
         "SupportVerdicts",
         {
             "verdicts": [
-                {"index": 0, "supported": False, "reason": "adds regional patterns not in the findings"},
-                {"index": 1, "supported": True, "reason": "source rounding"},
+                {"index": 0, "supported": False, "reason": "the title claims a boom"},
+                {"index": 1, "supported": False, "reason": "adds regional patterns not in the findings"},
+                {"index": 2, "supported": True, "reason": "source rounding"},
             ]
         },
     )
@@ -249,11 +251,14 @@ async def test_summary_the_judge_finds_unsupported_is_removed(sessions, database
     async with sessions() as session:
         report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
     assert report["summary"] == ""
+    # A rejected title falls back to the researcher's own question, never to other generated text.
+    assert report["title"] == "Analyse employment trends in the technology sector 2020-2024"
     assert report["verification"]["narrative_removed"] == [
+        {"text": "ICT employment and vacancies", "reason": "the title claims a boom"},
         {
             "text": "Employment in the sector grew while vacancies also rose.",
             "reason": "adds regional patterns not in the findings",
-        }
+        },
     ]
     assert {"source": "coordinator", "text": "Vacancy figures are rounded by the source."} in report[
         "limitations"
@@ -332,3 +337,41 @@ async def test_out_of_scope_question_gets_a_limitation_not_figures(sessions, dat
     async with sessions() as session:
         report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
     assert report["findings"] == [] and report["limitations"][0]["text"] == "Housing prices are not covered."
+
+
+async def test_unanswered_planned_metric_is_a_limitation_not_completed(sessions, database_url):
+    analysis_id, intent = await _start(sessions)
+    script = _happy_path_script()
+    # Keep everything up to the first verified finding (employment), then stop analysing.
+    first_claim = next(i for i, reply in enumerate(script) if callable(reply))
+    employment_only = [
+        *script[: first_claim + 1],
+        act("finish", {"summary": "Employment analysed."}),
+        tool_call("NextAction", {"action": "report", "objective": "Write the report", "rationale": "Done."}),
+        script[-1],  # ReportNarrative
+    ]
+    models = {
+        "bedrock": ScriptedChatModel(replies=employment_only),
+        "openai": ScriptedChatModel(replies=[ALL_SUPPORTED]),
+    }
+
+    status = await execute(
+        sessions, None, _settings(database_url), analysis_id, intent, "test", models=models
+    )
+
+    async with sessions() as session:
+        report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+    assert status == "completed_with_limitations"
+    (finding,) = report["findings"]
+    assert finding["text"].startswith("Employment level in Information & Communications")
+    assert report["coverage"]["uncovered"] == [
+        {
+            "sector": "info_comms",
+            "metric": "job_vacancies",
+            "label": "job vacancies in Information & Communications",
+        }
+    ]
+    assert report["limitations"][0] == {
+        "source": "coverage",
+        "text": "No verified finding covers job vacancies in Information & Communications.",
+    }

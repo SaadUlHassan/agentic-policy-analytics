@@ -172,8 +172,14 @@ class LLMRouter:
         async def call(model: BaseChatModel, limit_s: float) -> tuple[T, Any]:
             runnable = model.with_structured_output(schema, include_raw=True)
             history = list(messages)
+            ends_at = (
+                self.clock() + limit_s
+            )  # the repair attempt shares this budget; it does not get a fresh one
             for repair in (False, True):
-                out = cast(dict[str, Any], await asyncio.wait_for(runnable.ainvoke(history), limit_s))
+                remaining = ends_at - self.clock()
+                if remaining <= 0:
+                    raise TimeoutError("no time left for a structured-output repair")
+                out = cast(dict[str, Any], await asyncio.wait_for(runnable.ainvoke(history), remaining))
                 if out.get("parsed") is not None and out.get("parsing_error") is None:
                     return out["parsed"], out.get("raw")
                 if repair:
@@ -213,6 +219,11 @@ class LLMRouter:
             is_last = index == len(order) - 1
             for attempt in range(self.attempts_per_provider):
                 timeout = self._timeout(deadline, reserve=not is_last)
+                if timeout <= 0 and not is_last and self._timeout(deadline, reserve=False) > 0:
+                    # Too little time for this provider and a fallback: give it all to the fallback.
+                    errors.append(f"{provider}: skipped to leave the remaining time to the fallback")
+                    previous_failed = provider
+                    break
                 if timeout <= 0:
                     raise LLMUnavailable("; ".join([*errors, "deadline exceeded"]))
                 started = self.clock()

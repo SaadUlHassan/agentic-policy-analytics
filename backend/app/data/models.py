@@ -102,6 +102,20 @@ class NormalizedDataset(BaseModel):
         digest = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
         return self.model_copy(update={"artifact_id": digest})
 
+    def blocking_issues(self, series: SeriesData) -> list[QualityIssue]:
+        """Error-severity issues on this series (or on the whole dataset): such evidence is unusable.
+        Issues raised before regime splitting are keyed without the "@scheme" suffix."""
+        return [
+            i
+            for i in self.quality
+            if i.severity is Severity.ERROR
+            and (
+                i.series_key is None
+                or series.key == i.series_key
+                or series.key.startswith(f"{i.series_key}@")
+            )
+        ]
+
     def identified_series(self) -> list[SeriesData]:
         return [s for s in self.series if s.identity is not None]
 

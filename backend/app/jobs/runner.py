@@ -87,7 +87,7 @@ async def execute(
             return "lease_lost"
         raise
     except (LLMUnavailable, GraphRecursionError) as exc:
-        return await _finish_degraded(ctx, exc)
+        return await _finish_degraded(ctx, exc, query or "")
     except Exception as exc:
         log.exception("analysis_failed")
         await writer.emit("system", "error", "Analysis failed", {"code": "INTERNAL_ERROR"})
@@ -103,14 +103,14 @@ async def execute(
         structlog.contextvars.unbind_contextvars("analysis_id", "epoch")
 
 
-async def _finish_degraded(ctx: AgentContext, exc: Exception) -> str:
+async def _finish_degraded(ctx: AgentContext, exc: Exception, query: str) -> str:
     """Report verified findings without narrative when possible; otherwise fail clearly."""
     code = "LLM_UNAVAILABLE" if isinstance(exc, LLMUnavailable) else "STEP_LIMIT"
     await ctx.writer.emit(
         "system", "error", "Agents could not continue", {"code": code, "detail": str(exc)[:300]}
     )
     if ctx.plan is not None and ctx.evidence.verified_claims():
-        report = build_report(ctx.plan, ctx.evidence, narrative=None)
+        report = build_report(ctx.plan, ctx.evidence, narrative=None, question=query)
         report["limitations"].insert(
             0,
             {

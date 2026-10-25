@@ -57,27 +57,35 @@ class FencedWriter:
             raise LeaseLost(f"{self.analysis_id}: epoch {self.epoch} is no longer current")
         return row
 
-    async def emit(self, agent: str, type: str, title: str, detail: dict[str, Any] | None = None) -> int:
-        """Commit the event with the next per-analysis sequence number, then publish a wake-up hint."""
-        async with self.sessions() as session:
-            (seq,) = await self._fence(
-                session, "last_event_seq = last_event_seq + 1", returning="last_event_seq"
+    async def _append_event(
+        self, session: AsyncSession, agent: str, type: str, title: str, detail: dict[str, Any] | None
+    ) -> int:
+        """Allocate the next sequence number and add the event inside the caller's transaction."""
+        (seq,) = await self._fence(session, "last_event_seq = last_event_seq + 1", returning="last_event_seq")
+        session.add(
+            AnalysisEvent(
+                analysis_id=self.analysis_id,
+                seq=seq,
+                agent=agent,
+                type=type,
+                title=title,
+                detail=detail or {},
             )
-            session.add(
-                AnalysisEvent(
-                    analysis_id=self.analysis_id,
-                    seq=seq,
-                    agent=agent,
-                    type=type,
-                    title=title,
-                    detail=detail or {},
-                )
-            )
-            await session.commit()
+        )
+        return seq
+
+    async def _publish(self, seq: int) -> None:
         if self.publisher is not None:
             # Hints are best-effort; WebSocket readers also poll committed events.
             with contextlib.suppress(redis.RedisError):
                 await self.publisher.publish(event_channel(self.analysis_id), str(seq))
+
+    async def emit(self, agent: str, type: str, title: str, detail: dict[str, Any] | None = None) -> int:
+        """Commit the event with the next per-analysis sequence number, then publish a wake-up hint."""
+        async with self.sessions() as session:
+            seq = await self._append_event(session, agent, type, title, detail)
+            await session.commit()
+        await self._publish(seq)
         return seq
 
     async def save_artifact(self, dataset: NormalizedDataset) -> None:
@@ -157,7 +165,11 @@ class FencedWriter:
         report: dict[str, Any] | None = None,
         error: dict[str, Any] | None = None,
     ) -> None:
-        """Write the report and terminal status together, then announce it as the last event."""
+        """Commit the report, the terminal status and the terminal event in one transaction.
+
+        Readers treat the terminal event as "the report is stored". Committing them together means a
+        reader can never see the terminal status without the event (and close too early), or the event
+        without the report."""
         assert status in TERMINAL_STATUSES
         async with self.sessions() as session:
             await self._fence(
@@ -172,10 +184,15 @@ class FencedWriter:
                     .values(analysis_id=self.analysis_id, content=report)
                     .on_conflict_do_update(index_elements=["analysis_id"], set_={"content": report})
                 )
+            seq = await self._append_event(
+                session,
+                "system",
+                "status",
+                f"Analysis {status.value.replace('_', ' ')}",
+                {"status": status.value},
+            )
             await session.commit()
-        await self.emit(
-            "system", "status", f"Analysis {status.value.replace('_', ' ')}", {"status": status.value}
-        )
+        await self._publish(seq)
 
 
 def _json(value: Any) -> str | None:

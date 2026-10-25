@@ -29,7 +29,7 @@ def _passes(text: str, allowed_periods: set[str]) -> bool:
 
 
 def build_report(
-    plan: ResearchPlan, evidence: EvidenceStore, narrative: ReportNarrative | None
+    plan: ResearchPlan, evidence: EvidenceStore, narrative: ReportNarrative | None, *, question: str
 ) -> dict[str, Any]:
     citations = CitationIndex(evidence.datasets)
     verified = evidence.verified_claims()
@@ -49,16 +49,18 @@ def build_report(
     ]
 
     charts = _charts(plan, evidence, citations)
+    coverage = _coverage(plan, evidence)
     consistency = [_consistency(c, evidence, citations) for c in evidence.consistency]
     limitations = _derived_limitations(evidence)
-    title, summary, narrative_note = plan.intent, "", None
+    # The fallback title is the researcher's own question: it is never generated text.
+    title, summary, narrative_note = question, "", None
     if narrative is not None:
         kept = [
             t
             for t in [narrative.title, narrative.summary, *narrative.limitations]
             if _passes(t, allowed_periods)
         ]
-        if narrative.title in kept:
+        if narrative.title and narrative.title in kept:
             title = narrative.title
         if narrative.summary in kept:
             summary = narrative.summary
@@ -82,7 +84,14 @@ def build_report(
         "findings": findings,
         "charts": charts,
         "consistency_checks": consistency,
-        "limitations": limitations,
+        "coverage": coverage,
+        "limitations": [
+            *[
+                {"source": "coverage", "text": f"No verified finding covers {gap['label']}."}
+                for gap in coverage["uncovered"]
+            ],
+            *limitations,
+        ],
         "citations": [c.model_dump(mode="json") for c in citations.citations()],
         "evidence": {
             "selected": [
@@ -122,6 +131,28 @@ def _consistency(
         "citations": citations.cite(
             [ref(check.series_a, check.artifact_a), ref(check.series_b, check.artifact_b)]
         ),
+    }
+
+
+def _coverage(plan: ResearchPlan, evidence: EvidenceStore) -> dict[str, Any]:
+    """Which planned (sector, metric) pairs at least one verified finding actually answers."""
+    covered = {
+        (ref.identity.sector, ref.identity.metric)
+        for claim in evidence.verified_claims()
+        for a in claim.assertions.values()
+        for ref in evidence.computations[a.computation_id].inputs
+    }
+    labels = {s.source.identity.sector: s.source.identity.sector_label for s in evidence.selected.values()}
+
+    def label(sector: str, metric: str) -> str:
+        return f"{metric.replace('_', ' ')} in {labels.get(sector, sector.replace('_', ' '))}"
+
+    planned = [(s, m) for s in plan.sectors for m in plan.metrics] if plan.in_scope else []
+    return {
+        "planned": [label(s, m) for s, m in planned],
+        "uncovered": [
+            {"sector": s, "metric": m, "label": label(s, m)} for s, m in planned if (s, m) not in covered
+        ],
     }
 
 

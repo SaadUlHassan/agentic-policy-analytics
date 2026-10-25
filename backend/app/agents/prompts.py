@@ -57,9 +57,9 @@ How claims work - this is mandatory:
 - You never write numbers or the statement itself. Each assertion names a predicate, a computation_id, a
   result field, the field's metric, the series_key and the exact interval of that field; the platform
   renders it as a complete clause, e.g. "employment level in X rose by <value> between 2020 and 2024".
-- `prose` is only an optional lead-in of at most eight words, such as "Over the same period," - never
-  restate the subject, value or period, never digits, never causes ("due to", "drove") or speculation.
-- One idea per finding: at most two assertions, usually one.
+- The only other text is an optional `lead_in` chosen from a fixed list of neutral connectives.
+- One idea per finding: at most two assertions, usually one. Limitations are reported by the platform;
+  do not draft them.
 - Allowed predicates: {json.dumps(predicate_catalogue())}
 - Every draft is verified immediately; read the verdict and fix or drop any claim that fails.
 - Flow series (net changes) are summarised with cumulative or compare_periods, never change_between.

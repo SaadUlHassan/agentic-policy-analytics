@@ -23,11 +23,11 @@ from app.data.models import NormalizedDataset, SeriesData
 from app.data.periods import Frequency
 from app.grounding.checks import verify_claim
 from app.grounding.contracts import Assertion, Claim, ClaimKind
+from app.grounding.prose import LeadIn, compose_text
 from app.grounding.render import render_claim
 
 MAX_COMPUTATIONS_PER_ROUND = 8
 MAX_STATEMENTS_PER_FINDING = 2
-MAX_LEAD_IN_WORDS = 8
 
 
 def plan_window(plan: ResearchPlan, frequency: Frequency) -> list[str]:
@@ -226,6 +226,7 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                     "first_period": s.observations[0].period if s.observations else None,
                     "last_period": s.observations[-1].period if s.observations else None,
                     "missing_in_plan_window": _missing_in_window(s, plan_window(plan, s.identity.frequency)),
+                    "blocking_quality_errors": [f"{i.code}: {i.message}" for i in dataset.blocking_issues(s)],
                 }
             )
         return out or [{"note": f"no identified series for sector {sector!r} in {dataset_id}"}]
@@ -239,7 +240,8 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         problems = []
         if identity is None:
             problems.append(f"series is unidentified ({series.unidentified_reason})")
-        else:
+        problems += [f"quality error {i.code}: {i.message}" for i in dataset.blocking_issues(series)]
+        if identity is not None:
             if identity.sector not in plan.sectors:
                 problems.append(f"sector {identity.sector} is not in the plan {plan.sectors}")
             if identity.metric not in plan.metrics:
@@ -324,19 +326,13 @@ class _AssertionIn(BaseModel):
 
 
 class _Draft(_Step):
-    kind: Literal["measured", "comparison", "limitation"] | None = Field(
+    kind: Literal["measured", "comparison"] | None = Field(
         default=None, description="Optional; inferred from the assertions when omitted"
     )
-    prose: str = Field(
-        default="",
-        description=(
-            "Findings: an optional short lead-in placed before the statements, e.g. 'Over the same period,'. "
-            "Limitations: the whole limitation sentence. Never digits, causes or speculation."
-        ),
+    lead_in: LeadIn = Field(
+        default="", description="Optional neutral connective placed before the statements"
     )
-    assertions: list[_AssertionIn] = Field(
-        default=[], description="Statements to make; each renders as a clause"
-    )
+    assertions: list[_AssertionIn] = Field(description="One or two statements; each renders as a clause")
 
 
 _SINGLE_PERIOD_PREDICATES = {"level.at", "flow.at"}
@@ -344,16 +340,7 @@ _SINGLE_PERIOD_PREDICATES = {"level.at", "flow.at"}
 
 def infer_kind(assertions: list[_AssertionIn]) -> str:
     """Models sometimes omit `kind`; it follows from what the assertions state."""
-    if not assertions:
-        return "limitation"
     return "measured" if all(a.predicate in _SINGLE_PERIOD_PREDICATES for a in assertions) else "comparison"
-
-
-def compose_text(prose: str, slots: list[str]) -> str:
-    """Claim template: the lead-in, then the rendered statements joined into one sentence."""
-    statements = " and ".join("{" + s + "}" for s in slots)
-    text = " ".join(part for part in (prose.strip(), statements) if part)
-    return text if text.endswith(".") else text + "."
 
 
 _ARGS = {
@@ -463,19 +450,15 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         return _describe(result)
 
     async def draft_claim(
-        kind: str | None = None, prose: str = "", assertions: list[Any] | None = None, rationale: str = ""
+        assertions: list[Any], kind: str | None = None, lead_in: str = "", rationale: str = ""
     ) -> str:
-        parsed = [_AssertionIn.model_validate(a) for a in assertions or []]
+        parsed = [_AssertionIn.model_validate(a) for a in assertions]
         kind = kind or infer_kind(parsed)
         # Readability rules: one idea per finding. Rejected before verification, so they are not counted.
+        if not parsed:
+            return "EMPTY: a finding needs at least one assertion"
         if len(parsed) > MAX_STATEMENTS_PER_FINDING:
             return f"TOO LONG: at most {MAX_STATEMENTS_PER_FINDING} statements per finding; split it up"
-        if kind != "limitation" and any(ch.isdigit() for ch in prose):
-            return (
-                "REWRITE: the lead-in may not contain numbers or years; each statement states its own period"
-            )
-        if kind != "limitation" and len(prose.split()) > MAX_LEAD_IN_WORDS:
-            return f"TOO LONG: a lead-in has at most {MAX_LEAD_IN_WORDS} words, e.g. 'Over the same period,'"
         # A draft that states nothing new (every statement already in a verified finding) is refused.
         stated = {
             (a.predicate, a.computation_id, a.field): claim.id
@@ -490,7 +473,7 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         claim = Claim(
             id=f"k{len(ctx.evidence.claims) + 1}",
             kind=ClaimKind(kind),
-            text=compose_text(prose, slots),
+            text=compose_text(lead_in, slots),
             assertions={
                 slot: Assertion(
                     predicate=a.predicate,

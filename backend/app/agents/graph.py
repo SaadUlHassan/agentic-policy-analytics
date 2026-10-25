@@ -227,11 +227,12 @@ async def report(state: GraphState, runtime: Runtime[AgentContext]) -> dict[str,
     if plan.in_scope:
         findings = [render_claim(c, ctx.evidence.computations) for c in ctx.evidence.verified_claims()]
         narrative, removed = await _checked_narrative(ctx, state["query"], findings)
-    built = build_report(plan, ctx.evidence, narrative)
+    built = build_report(plan, ctx.evidence, narrative, question=state["query"])
     built["verification"]["narrative_removed"] = removed
     if not plan.in_scope:
         built["limitations"].insert(0, {"source": "coordinator", "text": plan.scope_note or "Out of scope."})
-    complete = bool(built["findings"]) and not ctx.evidence.refusals
+    # Completed only when every planned sector x metric has a verified finding and nothing was refused.
+    complete = bool(built["findings"]) and not ctx.evidence.refusals and not built["coverage"]["uncovered"]
     status = AnalysisStatus.COMPLETED if complete else AnalysisStatus.COMPLETED_WITH_LIMITATIONS
     await ctx.writer.emit(
         "coordinator",
@@ -297,15 +298,16 @@ async def _checked_narrative(
         )
     except LLMUnavailable:
         return None, []
-    sentences = [narrative.summary, *narrative.limitations]
+    # Every generated sentence is judged: title (0), summary (1), then limitations (2..).
+    sentences = [narrative.title, narrative.summary, *narrative.limitations]
     rejected = await _judge(ctx, findings, sentences)
     removed = [{"text": sentences[i], "reason": reason} for i, reason in rejected.items()]
-    if 0 in rejected and narrative.summary:
+    if 1 in rejected and narrative.summary:
         # One rewrite with the judge's reason; if that is also unsupported the report has no summary.
-        retry = await _rewrite_summary(ctx, query, findings, narrative.summary, rejected[0])
+        retry = await _rewrite_summary(ctx, query, findings, narrative.summary, rejected[1])
         if retry and not await _judge(ctx, findings, [retry]):
             narrative = narrative.model_copy(update={"summary": retry})
-            del rejected[0]
+            del rejected[1]
     await ctx.writer.emit(
         "coordinator",
         "narrative_check",
@@ -314,8 +316,9 @@ async def _checked_narrative(
     )
     return narrative.model_copy(
         update={
-            "summary": "" if 0 in rejected else narrative.summary,
-            "limitations": [t for i, t in enumerate(narrative.limitations, start=1) if i not in rejected],
+            "title": "" if 0 in rejected else narrative.title,
+            "summary": "" if 1 in rejected else narrative.summary,
+            "limitations": [t for i, t in enumerate(narrative.limitations, start=2) if i not in rejected],
         }
     ), removed
 

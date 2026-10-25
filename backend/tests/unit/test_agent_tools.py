@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import time
 
+import pytest
+import respx
+from pydantic import ValidationError
+
 from app.agents.context import AgentContext
 from app.agents.plan import ResearchPlan
 from app.agents.tools import analytics_tools, extraction_tools
+from app.connectors import singstat
 from app.connectors.catalog import get_catalog
-from app.connectors.http import Fetcher, get_snapshot_store
+from app.connectors.http import Fetcher, SnapshotStore, get_snapshot_store
 from app.data.taxonomy import get_taxonomy
 
 PLAN = ResearchPlan(
@@ -107,9 +112,10 @@ async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verifi
         "interval_end": "2024-Q4",
     }
 
-    digits = await tools["draft_claim"].ainvoke(
-        {"kind": "comparison", "prose": "Since 2020,", "assertions": [assertion], "rationale": "r"}
-    )
+    with pytest.raises(ValidationError):  # only allow-listed lead-ins exist in the schema
+        await tools["draft_claim"].ainvoke(
+            {"lead_in": "It is false that", "assertions": [assertion], "rationale": "r"}
+        )
     too_many = await tools["draft_claim"].ainvoke(
         {"kind": "comparison", "assertions": [assertion] * 3, "rationale": "r"}
     )
@@ -119,7 +125,7 @@ async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verifi
         {"kind": "comparison", "assertions": [assertion], "rationale": "r"}
     )
 
-    assert digits.startswith("REWRITE") and too_many.startswith("TOO LONG")
+    assert too_many.startswith("TOO LONG")
     assert ok == (
         "VERIFIED k1: Job vacancies in Information & Communications rose by 21.7% "
         "between 2020-Q1 and 2024-Q4."
@@ -186,3 +192,37 @@ async def test_employment_level_is_cross_checked_against_its_wide_format_mirror(
     )
     assert "d_d2518fed6cc2014f0cd061b4570a9592 (datagov): consistent" in reply
     assert ctx.evidence.consistency[0].periods == ["2020", "2021", "2022", "2023", "2024"]
+
+
+@respx.mock
+async def test_series_with_a_blocking_quality_error_cannot_be_selected(tmp_path):
+    # SingStat says "Number" where the catalogue expects thousands: a UNIT_MISMATCH error on the series.
+    page = {
+        "Data": {
+            "title": "Employment",
+            "row": [
+                {
+                    "seriesNo": "3.4",
+                    "rowText": "Information And Communications",
+                    "uoM": "Number",
+                    "columns": [{"key": str(y), "value": "180300"} for y in range(2020, 2025)],
+                }
+            ],
+        }
+    }
+    respx.get(singstat.tabledata_url("M182841", 0)).respond(json=page)
+    ctx = _ctx()
+    ctx.fetcher = Fetcher(mode="live", snapshots=SnapshotStore(tmp_path), backoff_s=0)
+    tools = _tools(extraction_tools(ctx, PLAN.model_copy(update={"metrics": ["employment_level"]})))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M182841", "rationale": "r"})
+
+    (inspected,) = await tools["inspect_series"].ainvoke(
+        {"dataset_id": "M182841", "sector": "info_comms", "rationale": "r"}
+    )
+    reply = await tools["select_series"].ainvoke(
+        {"series_key": "M182841:3.4@SSIC2020", "reason": "fits", "rationale": "r"}
+    )
+
+    assert inspected["blocking_quality_errors"][0].startswith("UNIT_MISMATCH")
+    assert reply.startswith("REFUSED by policy") and "UNIT_MISMATCH" in reply
+    assert not ctx.evidence.selected

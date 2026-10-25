@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import AnalysisEvent, AnalysisStatus, OutboxIntent
 from app.events.stream import events_after
@@ -143,3 +144,30 @@ async def test_saving_the_same_computation_twice_is_idempotent(sessions):
     async with sessions() as session:
         count = await session.scalar(select(func.count()).select_from(text("computations")))
     assert count == 1
+
+
+async def test_report_status_and_terminal_event_commit_together_or_not_at_all(sessions):
+    analysis_id, intent_id = await _new(sessions)
+    c = await claim(sessions, analysis_id, intent_id, "w")
+    writer = FencedWriter(sessions, None, analysis_id, c.epoch)
+    await writer.emit("coordinator", "plan", "plan")
+    # Occupy the next sequence number so the terminal event's insert fails inside finish().
+    async with sessions() as session:
+        await session.execute(
+            text(
+                "INSERT INTO analysis_events (analysis_id, seq, agent, type, title, detail) "
+                "VALUES (:id, 2, 'x', 'x', 'blocker', '{}')"
+            ),
+            {"id": analysis_id},
+        )
+        await session.commit()
+
+    with pytest.raises(IntegrityError):
+        await writer.finish(AnalysisStatus.COMPLETED, report={"findings": []})
+
+    async with sessions() as session:
+        status = await session.scalar(text("SELECT status FROM analyses WHERE id = :id"), {"id": analysis_id})
+        report = await session.scalar(
+            text("SELECT count(*) FROM reports WHERE analysis_id = :id"), {"id": analysis_id}
+        )
+    assert status == "running" and report == 0  # nothing from finish() was committed

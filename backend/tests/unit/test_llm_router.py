@@ -98,3 +98,30 @@ async def test_expired_deadline_raises_without_calling_a_model():
     with pytest.raises(LLMUnavailable, match="deadline"):
         await router.step(QUESTION, [], agent="a", purpose="p", deadline=90.0)
     assert records == []
+
+
+async def test_too_little_time_for_primary_plus_reserve_goes_straight_to_the_fallback():
+    # 10 s left, 30 s reserved for the fallback: the primary is skipped, not a reason to give up.
+    router, records = _router([AIMessage("never")], [AIMessage("fallback answer")], clock=lambda: 0.0)
+    msg = await router.step(QUESTION, [], agent="a", purpose="p", deadline=10.0)
+    assert msg.content == "fallback answer"
+    assert router.models["bedrock"].calls == []
+    assert [(r.provider, r.fallback_from) for r in records] == [("openai", "bedrock")]
+
+
+async def test_structured_repair_shares_the_original_time_budget():
+    now = [0.0]
+
+    def slow_invalid_reply(messages):
+        now[0] += 50.0  # the first answer uses up more than the 45 s per-call budget
+        return tool_call("Plan", {"sector": "info_comms"})
+
+    router, _ = _router(
+        [slow_invalid_reply],
+        [tool_call("Plan", {"sector": "x", "start_year": 2021})],
+        clock=lambda: now[0],
+        attempts_per_provider=1,
+    )
+    plan = await router.structured(Plan, QUESTION, agent="coordinator", purpose="plan")
+    assert len(router.models["bedrock"].calls) == 1  # no repair attempt after the budget was spent
+    assert plan.start_year == 2021

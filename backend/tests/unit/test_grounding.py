@@ -38,10 +38,10 @@ def _failed(claim: Claim) -> set[str]:
 
 
 def test_valid_claim_passes_and_is_rendered_from_the_computation():
-    claim = _claim(text="Over the period, {a1}.")
+    claim = _claim(text="Over the same period, {a1}.")
     assert verify_claim(claim, COMPUTATIONS).passed
     assert render_claim(claim, COMPUTATIONS) == (
-        "Over the period, employment level in Information & Communications "
+        "Over the same period, employment level in Information & Communications "
         "rose by 14.4% between 2020 and 2024."
     )
 
@@ -93,9 +93,26 @@ def test_prose_cannot_add_numbers_or_causal_claims(text):
     assert _failed(_claim(text=text)) & {"no_free_numbers", "no_causal_language"}
 
 
-def test_years_in_prose_must_match_asserted_periods():
-    assert verify_claim(_claim(text="From 2020 to 2024, {a1}."), COMPUTATIONS).passed
-    assert "no_free_numbers" in _failed(_claim(text="Since 2019, {a1}."))
+@pytest.mark.parametrize(
+    "text",
+    [
+        "It is false that {a1}.",  # negates a correctly rendered statement
+        "Contrary to reports, {a1}.",
+        "From 2020 to 2024, {a1}.",
+        "{a1}, a record.",
+        "Over the same period {a1}.",  # near-miss of an allowed lead-in
+    ],
+)
+def test_only_allow_listed_lead_ins_may_frame_a_statement(text):
+    assert "safe_prose" in _failed(_claim(text=text))
+
+
+def test_every_allow_listed_lead_in_is_accepted():
+    from app.grounding.prose import LEAD_INS
+
+    for lead_in in LEAD_INS:
+        text = f"{lead_in} {{a1}}." if lead_in else "{a1}."
+        assert verify_claim(_claim(text=text), COMPUTATIONS).passed, lead_in
 
 
 def test_the_year_of_an_asserted_quarter_may_be_written_alone():
@@ -115,10 +132,11 @@ def test_recommendations_cannot_carry_figures_and_findings_need_evidence():
     assert "recommendation_has_no_figures" in _failed(_claim(kind=ClaimKind.RECOMMENDATION))
     no_evidence = Claim(id="k3", kind=ClaimKind.MEASURED, text="Employment grew strongly.")
     assert "finding_has_evidence" in _failed(no_evidence)
+    # Free-text limitations are not findings: the verifier does not accept them.
     limitation = Claim(
         id="k4", kind=ClaimKind.LIMITATION, text="Quarterly employment levels are not published."
     )
-    assert verify_claim(limitation, COMPUTATIONS).passed
+    assert "safe_prose" in _failed(limitation)
 
 
 def test_text_slots_must_match_assertions():

@@ -9,6 +9,7 @@ import string
 from app.analytics.results import Computation, Interpretation
 from app.grounding.contracts import Assertion, CheckResult, Claim, ClaimKind, ClaimVerdict
 from app.grounding.predicates import PREDICATES
+from app.grounding.prose import is_composed
 
 CAUSAL_TERMS = (
     "caused",
@@ -34,6 +35,11 @@ _KIND_NEEDS = {
     ClaimKind.ASSOCIATION: Interpretation.EXPLORATORY_ASSOCIATION,
     ClaimKind.PROJECTION: Interpretation.PROJECTION,
 }
+
+
+def _slot_order(slot: str) -> tuple[int, str]:
+    digits = "".join(ch for ch in slot if ch.isdigit())
+    return (int(digits) if digits else 0, slot)
 
 
 def _slots(text: str) -> list[str]:
@@ -125,6 +131,13 @@ class _BlankSlots(dict):
 def verify_claim(claim: Claim, computations: dict[str, Computation]) -> ClaimVerdict:
     checks: list[CheckResult] = []
     slots = _slots(claim.text)
+    checks.append(
+        CheckResult(
+            name="safe_prose",
+            passed=is_composed(claim.text, sorted(claim.assertions, key=_slot_order)),
+            detail="a finding may only be an allow-listed lead-in followed by its statements",
+        )
+    )
     checks.append(
         CheckResult(
             name="slots_bound",
