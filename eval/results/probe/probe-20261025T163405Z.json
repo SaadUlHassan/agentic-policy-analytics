@@ -1,0 +1,168 @@
+{
+  "generated_at": "20261025T163405Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "apac.amazon.nova-pro-v1:0",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 1141,
+          "detail": null,
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "total_tokens": 10,
+            "input_token_details": {
+              "cache_creation": 0,
+              "cache_read": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1299,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_2lStnkMtCtYkHdtPBxxSUJ",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 1414,
+          "detail": {
+            "intent": "Analyse employment trends in the technology sector from 2020-2024",
+            "sector": "SSIC 2020 Section J Information & Communications",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "job vacancies"
+            ],
+            "needs_clarification": false,
+            "rationale": "This plan was chosen to provide insights into the employment trends within the technology sector over a five-year period, which can inform policy decisions and economic strategies."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 2323,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_y1IrxPPMm5XW2zHuMCY558",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": true,
+            "final_text": "[{'type': 'reasoning_content', 'reasoning_content': {'text': 'The tool result provides metadata about the series but does not include the actual data. I need to fetch the data for the years 2020 to 2024.'}}, {'type': 'tool_use', 'name': 'fetch_singstat_series', 'input': {'series_no': '3.4', 'table_id': 'M182841'}, 'id': 'tooluse_CfMfCvRxdOJvhf687GQt1h'}]"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 715,
+          "detail": {
+            "chunks": 14,
+            "first_chunk_ms": 584,
+            "text": "[][{\"type\": \"text\", \"text\": \"Sure\", \"index\": 0}][{\"type\": \"text\", \"text\": \", here are\", \"index\": 0}][{\"type\": \"text\", \"text\": \" the numbers from 1 to\", \"index\": 0}][{\"type\": \"text\", \"text\": \" 5,\", \"in"
+          }
+        }
+      },
+      "all_pass": true
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 2179,
+          "detail": null,
+          "usage": {
+            "input_tokens": 13,
+            "output_tokens": 4,
+            "total_tokens": 17,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1942,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_c0iKq2eoEDC5AE6nMZbKpkfS",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 3547,
+          "detail": {
+            "intent": "Analyse how employment in the technology sector changed over 2020\u20132024, including overall levels and growth trends.",
+            "sector": "Technology sector, assumed to correspond to SSIC 2020 Section J: Information & Communications.",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "year-on-year employment change",
+              "year-on-year employment growth rate",
+              "share of total employment"
+            ],
+            "needs_clarification": false,
+            "rationale": "The request asks for employment trends over a defined period, so the plan focuses on employment levels and growth measures from 2020 to 2024. Because \u201ctechnology sector\u201d is not a formal SSIC sector, it is mapped by assumption to SSIC 2020 Section J: Information & Communications."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 8020,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_sN49PMZgrUlY7OArAVQIHBsr",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": false,
+            "final_text": "Fetched the required data series for the technology-sector employment analysis.\n\n- **Source:** SingStat Table Builder  \n- **Table:** `M182841` \u2014 Year-end employment by sector  \n- **Series:** `3.4`  \n- **Sector:** Information And Communications  \n- **Unit:** Thousand persons  \n- **Period needed:** 2020\u20132024  \n- **Computation ID:** `c1`\n\nUse this series as the technology-sector employment proxy. Numeric results should be referenced via placeholders, e.g. `{{c1.pct_change}}`, rather than typed manu"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1327,
+          "detail": {
+            "chunks": 13,
+            "first_chunk_ms": 1230,
+            "text": "1\n2\n3\n4\n5"
+          }
+        }
+      },
+      "all_pass": true
+    }
+  ]
+}

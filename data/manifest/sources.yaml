@@ -1,0 +1,215 @@
+# Source manifest (plan §4.2). Facts below were verified against live responses and the
+# captured snapshots in data/snapshots/ on 2026-10-24/25. Anything not yet verified is
+# marked `unverified` and must be confirmed before it is relied on.
+version: 1
+
+platforms:
+  singstat:
+    name: SingStat Table Builder
+    publisher: Department of Statistics Singapore (DOS)
+    api: https://tablebuilder.singstat.gov.sg/api/table/tabledata/{table_id}?limit={n}&offset={k}
+    search_api: https://tablebuilder.singstat.gov.sg/api/table/resourceid?keyword={kw}&searchOption=all
+    human_url: https://tablebuilder.singstat.gov.sg/table/TS/{table_id}
+    auth: none
+    pagination: >-
+      limit/offset count DATA POINTS, not rows. The server caps each response at 5000 points
+      even when a larger limit is requested (the response echoes the requested limit). A series
+      can be split across pages; merge fragments by seriesNo. Stop when a page returns < 5000 points.
+    values: strings; hierarchy encoded in seriesNo (e.g. 1.2.4 parent, 1.2.4.2 child)
+    markers:
+      "-": {meaning: unverified, handling: "value null, marker_code=unknown, flagged in QualityReport"}
+    licence: unverified
+  datagov:
+    name: Data.gov.sg
+    publisher: GovTech Singapore (platform); datasets managed by originating agencies
+    datastore_api: https://data.gov.sg/api/action/datastore_search?resource_id={id}&limit={n}&offset={k}
+    metadata_api: https://api-production.data.gov.sg/v2/public/api/datasets/{id}/metadata
+    download_api: >-
+      https://api-open.data.gov.sg/v1/public/api/datasets/{id}/initiate-download then /poll-download;
+      poll returns a pre-signed S3 URL (temporary credentials - never persist it)
+    human_url: https://data.gov.sg/datasets/{id}/view
+    auth: optional API key (higher limits)
+    rate_limits_no_key: {datastore_per_10s: 4, downloads_per_10s: 2, realtime_per_10s: 6}
+    rate_limit_behaviour: >-
+      Observed: an over-limit datastore call returned a body without "result" (treat as throttled
+      and back off). Documented: HTTP 429. Limits must be shared across workers.
+    pagination: datastore offset/limit until offset >= result.total (1000 per page used)
+    licence: unverified
+  mom:
+    name: MOM Statistics (Manpower Research & Statistics Department)
+    publisher: Ministry of Manpower
+    index_page: https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx
+    auth: none
+    discovery: >-
+      File names embed the release date (DDMMYYYY), e.g. mrsd_4_annl_emp_chg_by_ind_20032026.xlsx.
+      Discover by stable prefix on the index page and pick the newest; fall back to last-known URL,
+      then snapshot.
+    markers:
+      "-": {meaning: "Nil or negligible", evidence: "legend in SSIC2020 sheet of mrsd_3/mrsd_4 workbooks",
+            handling: "value null, marker_code=nil_or_negligible; excluded from calculations and disclosed"}
+    licence: unverified
+
+datasets:
+  - id: M182841
+    platform: singstat
+    origin_agency: MOM
+    title: Employment (Persons) By Sector, (As At Year-End), Annual
+    format: json_api
+    frequency: annual
+    measure_type: stock
+    reference_convention: year_end
+    population: total_employment
+    unit: Thousand
+    classification: "SSIC 2020 from 2008; SSIC 2005 before 2008 (footnote)"
+    coverage: "2001-2025"
+    series_of_interest:
+      - {series_no: "3.4", label: Information And Communications, code_set: "SSIC2020:J58-63"}
+    footnotes: >-
+      Primarily administrative records, self-employed component estimated from the Labour Force
+      Survey. Data may not add up due to rounding.
+    mirrors: [d_d2518fed6cc2014f0cd061b4570a9592]
+
+  - id: M183891
+    platform: singstat
+    origin_agency: MOM
+    title: Changes In Employment By Sector, (Compared To The Previous Period), Quarterly
+    format: json_api
+    frequency: quarterly
+    measure_type: flow
+    reference_convention: quarter_end_difference
+    population: total_employment
+    unit: Number (persons)
+    classification: "SSIC 2020 from 2009; SSIC 2005 for 2002-2008 (footnote)"
+    coverage_ict: "2017Q1-2026Q2"
+    series_of_interest:
+      - {series_no: "1.2.4", label: Information & Communications, code_set: "SSIC2020:J58-63"}
+    note: "MOM's mrsd_3 file reports the same statistic in THOUSANDS; SingStat reports persons."
+
+  - id: M184071
+    platform: singstat
+    origin_agency: MOM
+    title: Job Vacancies By Industry And Occupational Group (SSIC 2020) (End Of Period), Quarterly
+    format: json_api
+    frequency: quarterly
+    measure_type: stock
+    reference_convention: quarter_end
+    population: establishments (Labour Market Survey; private >=25 employees before 2006, incl. public sector from 2006)
+    unit: Number (persons), rounded to nearest 100
+    classification: "SSIC 2020 from 2006 (footnote)"
+    coverage_ict: "2006Q1-2026Q2"
+    series_of_interest:
+      - {series_no: "1.2.4", label: Information And Communications, code_set: "SSIC2020:J58-63"}
+      - {series_no: "1.2.4.2", label: IT & Other Information Services, code_set: "SSIC2020:J62-63", note: "child of 1.2.4 - never merge"}
+    footnotes: "Annual figures are simple averages of the four quarterly figures. June 2022 revised."
+    mirrors: [d_3f17bbf67d31d4d402caa8755eb74afc]
+
+  - id: M184021
+    platform: singstat
+    origin_agency: MOM
+    title: Average Monthly Recruitment Rate By Industry And Occupational Group, (SSIC 2020), Quarterly
+    format: json_api
+    frequency: quarterly
+    measure_type: rate
+    reference_convention: monthly_average_within_quarter
+    unit: Per Cent
+    classification: "SSIC 2020 for 2006-current (footnote)"
+    series_of_interest:
+      - {series_no: "1.4.4", label: Information And Communications, code_set: "SSIC2020:J58-63"}
+
+  - id: M184041
+    platform: singstat
+    origin_agency: MOM
+    title: Average Monthly Recruitment Rate By Industry And Occupational Group, (SSIC 2020), Annual
+    format: json_api
+    frequency: annual
+    measure_type: rate
+    reference_convention: monthly_average_within_year
+    unit: Per Cent
+
+  - id: M182081
+    platform: singstat
+    origin_agency: MOM (Labour Force Survey)
+    title: Employed Residents Aged 15 Years And Over By Industry And Occupation, (June), Annual
+    format: json_api
+    frequency: annual
+    measure_type: stock
+    reference_convention: june
+    population: residents (citizens and PRs)
+    unit: Thousand
+
+  - id: d_01966fdb498fa7fa2863635e25539693
+    platform: datagov
+    origin_agency: MOM
+    title: Number of Job Vacancy by Industry - Annual
+    human_url: https://data.gov.sg/datasets/d_01966fdb498fa7fa2863635e25539693/view
+    format: json_api
+    frequency: annual
+    measure_type: stock_average
+    reference_convention: average_of_quarter_ends
+    unit: Number (persons), rounded to nearest 100
+    fields: [year, industry, job_vacancy]
+    markers: {"-": {meaning: unverified, handling: "value null, marker_code=unknown"}}
+    note: >-
+      Annual value = mean of the four quarterly values, rounded to 100 (verified: ICT 2022 quarterly
+      mean 10,325 -> published 10,300). Industry labels change across SSIC versions.
+
+  - id: d_3f17bbf67d31d4d402caa8755eb74afc
+    platform: datagov
+    origin_agency: MOM
+    title: Number of Job Vacancy by Industry - Quarterly
+    human_url: https://data.gov.sg/datasets/d_3f17bbf67d31d4d402caa8755eb74afc/view
+    format: [json_api, csv_download]
+    frequency: quarterly
+    measure_type: stock
+    reference_convention: quarter_end
+    fields: [quarter, industry, job_vacancy]
+    mirror_of: M184071
+    consistency_check: "ICT 2020Q1-2024Q4 identical to M184071 series 1.2.4 (verified on snapshot)"
+
+  - id: d_d2518fed6cc2014f0cd061b4570a9592
+    platform: datagov
+    origin_agency: MOM (adapted from SingStat M182841)
+    title: Employment (Persons) By Sector, (As At Year-End), Annual
+    human_url: https://data.gov.sg/datasets/d_d2518fed6cc2014f0cd061b4570a9592/view
+    format: json_api (wide: one column per year)
+    mirror_of: M182841
+    markers: {"na": {meaning: unverified, handling: "value null, marker_code=unknown"}}
+    open_issue: "Contains 'na' cells for 2001-2003 while M182841 has none - investigate in consistency check."
+
+  - id: mrsd_4_annl_emp_chg_by_ind
+    platform: mom
+    origin_agency: MOM
+    title: Annual Employment Change by Industry
+    format: [xlsx, csv]
+    frequency: annual
+    measure_type: flow
+    unit: Thousand
+    workbook_sheets: [Contents, "SSIC1996 & SSIC2000", SSIC2005, SSIC2020]
+    csv_fields: [year, industry1, industry2, industry3, employment_change]
+
+  - id: mrsd_3_qtly_emp_chg_by_ind
+    platform: mom
+    origin_agency: MOM
+    title: Quarterly Employment Change by Industry
+    format: [xlsx, csv]
+    frequency: quarterly
+    measure_type: flow
+    unit: Thousand
+    workbook_sheets: [Contents, "SSIC1996 & SSIC2000", SSIC2005, SSIC2020]
+    csv_fields: [quarter, industry1, industry2, industry3, employment_change]
+    quirks: "CSV carries 6 trailing empty columns (Unnamed: 5..10)."
+
+demo_correlation_pair:
+  question: >-
+    In quarters when more ICT vacancies were open at quarter end, was ICT employment growth over
+    the same quarter (lag 0) and the next quarter (lag 1) stronger? (exploratory association)
+  x: {dataset: M184071, series_no: "1.2.4", measure_type: stock, reference_convention: quarter_end}
+  y: {dataset: M183891, series_no: "1.2.4", measure_type: flow, reference_convention: quarter_end_difference}
+  pairing_rule: stock_at_quarter_end__x__flow_over_quarter
+  window: 2020Q1-2024Q4
+  aligned_n: {lag0: 20, lag1: 19}
+  caveats:
+    - different populations (establishment survey vs administrative total employment)
+    - vacancies rounded to nearest 100
+    - observations are serially dependent; descriptive only, no p-values
+  label_synonym: "'Information & Communications' == 'Information And Communications' (& <-> and)"

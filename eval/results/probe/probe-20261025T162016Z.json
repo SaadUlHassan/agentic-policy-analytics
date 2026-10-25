@@ -1,0 +1,123 @@
+{
+  "generated_at": "20261025T162016Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "global.anthropic.claude-sonnet-5-5",
+      "checks": {
+        "basic_invoke": {
+          "pass": false,
+          "ms": 771,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): anthropic.claude-sonnet-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/",
+          "usage": null
+        },
+        "tool_call": {
+          "pass": false,
+          "ms": 325,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): anthropic.claude-sonnet-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/"
+        },
+        "structured_output": {
+          "pass": false,
+          "ms": 328,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): anthropic.claude-sonnet-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/"
+        },
+        "react_turn": {
+          "pass": false,
+          "ms": 339,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the Converse operation (reached max retries: 0): anthropic.claude-sonnet-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/"
+        },
+        "streaming": {
+          "pass": false,
+          "ms": 353,
+          "detail": "AccessDeniedException: An error occurred (AccessDeniedException) when calling the ConverseStream operation (reached max retries: 0): anthropic.claude-sonnet-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/"
+        }
+      },
+      "all_pass": false
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 2545,
+          "detail": null,
+          "usage": {
+            "input_tokens": 13,
+            "output_tokens": 14,
+            "total_tokens": 27,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 4
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1686,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_EuA1xLUd3lcsL7HPJ4ohqfMx",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 4276,
+          "detail": {
+            "intent": "Analyse how employment in Singapore's technology sector changed annually from 2020 to 2024, including overall direction and growth patterns.",
+            "sector": "Technology sector, assumed to mean SSIC 2020 Section J: Information & Communications.",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "year-on-year employment change",
+              "year-on-year employment growth rate",
+              "employment share of total workforce"
+            ],
+            "needs_clarification": false,
+            "rationale": "The request asks for employment trends over a defined period, so the plan focuses on annual employment levels and changes from 2020 through 2024. Because \u201ctechnology sector\u201d is not a formal statistical category, it is mapped to SSIC 2020 Section J: Information & Communications as the working assumption."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 9824,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "call_9Y27Oni4wY2hTe0LV1sROeC9",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": false,
+            "final_text": "Fetched the required SingStat series for analysing technology-sector employment trends.\n\n**Source:** SingStat Table Builder  \n**Table:** M182841  \n**Series:** 3.4 \u2014 Information And Communications  \n**Unit:** Thousand persons  \n**Computation ID:** `c1`\n\n| Year | Employment |\n|---|---:|\n| 2020 | {{c1.value_2020}} |\n| 2021 | {{c1.value_2021}} |\n| 2022 | {{c1.value_2022}} |\n| 2023 | {{c1.value_2023}} |\n| 2024 | {{c1.value_2024}} |\n\nUseful derived indicators for the trend analysis:\n\n- **Absolute chan"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1283,
+          "detail": {
+            "chunks": 13,
+            "first_chunk_ms": 1106,
+            "text": "1\n2\n3\n4\n5"
+          }
+        }
+      },
+      "all_pass": true
+    }
+  ]
+}

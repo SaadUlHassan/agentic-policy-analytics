@@ -1,0 +1,162 @@
+{
+  "generated_at": "20261025T162123Z",
+  "bedrock_region": "ap-southeast-1",
+  "results": [
+    {
+      "provider": "bedrock",
+      "model": "apac.amazon.nova-pro-v1:0",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 701,
+          "detail": null,
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "total_tokens": 10,
+            "input_token_details": {
+              "cache_creation": 0,
+              "cache_read": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 1725,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_oB9kTTkdGtB6eYSJhQAUJY",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 1314,
+          "detail": {
+            "intent": "Analyse employment trends in the technology sector from 2020-2024",
+            "sector": "SSIC 2020 Section J Information & Communications",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "job vacancies"
+            ],
+            "needs_clarification": false,
+            "rationale": "This plan was chosen to provide insights into the employment trends within the technology sector over a five-year period. Understanding these trends can help inform policy decisions and strategic planning within the industry."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 2194,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "series_no": "3.4",
+                "table_id": "M182841"
+              },
+              "id": "tooluse_1LKNgL5HNM6dCkw0ZMvGzS",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": true,
+            "final_text": "[{'type': 'reasoning_content', 'reasoning_content': {'text': 'The tool result provides metadata about the series but does not include the actual data. I need to fetch the actual data for the years 2020 to 2024.'}}, {'type': 'tool_use', 'name': 'fetch_singstat_series', 'input': {'series_no': '3.4', 'table_id': 'M182841'}, 'id': 'tooluse_3EeOSmwlnVqsQaOQiVxkl2'}]"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 917,
+          "detail": {
+            "chunks": 14,
+            "first_chunk_ms": 827,
+            "text": "[][{\"type\": \"text\", \"text\": \"Sure\", \"index\": 0}][{\"type\": \"text\", \"text\": \", here are\", \"index\": 0}][{\"type\": \"text\", \"text\": \" the numbers from 1 to\", \"index\": 0}][{\"type\": \"text\", \"text\": \" 5,\", \"in"
+          }
+        }
+      },
+      "all_pass": true
+    },
+    {
+      "provider": "bedrock",
+      "model": "global.amazon.nova-2-lite-v1:0",
+      "checks": {
+        "basic_invoke": {
+          "pass": true,
+          "ms": 873,
+          "detail": null,
+          "usage": {
+            "input_tokens": 53,
+            "output_tokens": 4,
+            "total_tokens": 57,
+            "input_token_details": {
+              "cache_creation": 0,
+              "cache_read": 0
+            }
+          }
+        },
+        "tool_call": {
+          "pass": true,
+          "ms": 937,
+          "detail": [
+            {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "tooluse_hhrw2ssrgd4qLOLuvdztWQ",
+              "type": "tool_call"
+            }
+          ]
+        },
+        "structured_output": {
+          "pass": true,
+          "ms": 1472,
+          "detail": {
+            "intent": "Analyse employment trends in the technology sector from 2020-2024",
+            "sector": "SSIC 2020 Section J Information & Communications (assumed from 'technology sector')",
+            "start_year": 2020,
+            "end_year": 2024,
+            "metrics": [
+              "employment level",
+              "job vacancies"
+            ],
+            "needs_clarification": false,
+            "rationale": "This plan focuses on key employment metrics to track growth and demand in the technology sector over a five-year period, providing insights into sectoral health and labour market dynamics."
+          }
+        },
+        "react_turn": {
+          "pass": true,
+          "ms": 3087,
+          "detail": {
+            "action": {
+              "name": "fetch_singstat_series",
+              "args": {
+                "table_id": "M182841",
+                "series_no": "3.4"
+              },
+              "id": "tooluse_cwut3GntCNPvzRISOC7TcT",
+              "type": "tool_call"
+            },
+            "final_has_tool_calls": false,
+            "final_text": "I have fetched the data for the Information and Communications sector (series 3.4) from SingStat Table Builder table M182841. However, the response only contains metadata and placeholders for the actual data values.\n\nTo analyze employment trends in the technology sector from 2020-2024, I need the actual year-end employment figures for each year. The response indicates that numbers must be referenced via placeholders like `{{c1.pct_change}}`, but it doesn't show the actual values.\n\nCould you plea"
+          }
+        },
+        "streaming": {
+          "pass": true,
+          "ms": 1308,
+          "detail": {
+            "chunks": 10,
+            "first_chunk_ms": 774,
+            "text": "[][{\"type\": \"text\", \"text\": \"1\", \"index\": 0}][{\"type\": \"text\", \"text\": \"  \\n\", \"index\": 0}][{\"type\": \"text\", \"text\": \"2  \\n3  \\n4\", \"index\": 0}][{\"type\": \"text\", \"text\": \"  \\n5\", \"index\": 0}][{\"type\":"
+          }
+        }
+      },
+      "all_pass": true
+    }
+  ]
+}
