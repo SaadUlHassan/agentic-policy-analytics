@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from collections.abc import Callable
@@ -23,19 +22,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from botocore.config import Config
-from langchain_aws import ChatBedrockConverse
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "eval" / "results" / "probe"
 
 sys.path.insert(0, str(REPO_ROOT / "backend"))
-from app.core.config import Settings, get_settings  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
+from app.llm.providers import build_bedrock, build_openai  # noqa: E402
 
 
 @tool
@@ -69,22 +66,6 @@ OBSERVATION = json.dumps(
         "note": "Numbers must be referenced via placeholders such as {{c1.pct_change}}; do not type numbers.",
     }
 )
-
-
-def build_bedrock(model_id: str, settings: Settings) -> BaseChatModel:
-    if settings.aws_bedrock_api_key:
-        # botocore reads Bedrock API keys from this variable.
-        os.environ["AWS_BEARER_TOKEN_BEDROCK"] = settings.aws_bedrock_api_key.get_secret_value()
-    # total_max_attempts=1 => exactly one HTTP request (max_attempts=1 would allow a retry).
-    cfg = Config(retries={"total_max_attempts": 1, "mode": "standard"}, read_timeout=60, connect_timeout=10)
-    return ChatBedrockConverse(
-        model=model_id, region_name=settings.aws_bedrock_region, config=cfg, temperature=0, max_tokens=800
-    )
-
-
-def build_openai(model_id: str, settings: Settings) -> BaseChatModel:
-    key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
-    return ChatOpenAI(model=model_id, api_key=key, max_retries=0, timeout=60, max_tokens=800)
 
 
 def timed(fn: Callable[[], Any]) -> tuple[bool, float, Any]:
@@ -191,7 +172,7 @@ def main() -> int:
     ):
         for model_id in model_ids:
             print(f"probing {provider}:{model_id} ...", flush=True)
-            results.append(probe_model(provider, model_id, build(model_id, settings)))
+            results.append(probe_model(provider, model_id, build(settings, model_id)))
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)

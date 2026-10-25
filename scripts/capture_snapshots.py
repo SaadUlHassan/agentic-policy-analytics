@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,12 @@ from urllib.parse import urljoin
 import httpx
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "backend"))
+# Snapshot mode looks payloads up by URL, so capture must build URLs exactly as the connectors do.
+from app.connectors.datagov import datastore_url, metadata_url  # noqa: E402
+from app.connectors.singstat import PAGE_POINTS as SINGSTAT_PAGE_POINTS  # noqa: E402
+from app.connectors.singstat import tabledata_url  # noqa: E402
+
 SNAP_DIR = REPO_ROOT / "data" / "snapshots"
 UA = {"User-Agent": "policy-analytics-snapshot/0.1 (research prototype)", "Accept": "application/json"}
 
@@ -33,7 +40,6 @@ DATAGOV_CSV_DOWNLOADS = ["d_3f17bbf67d31d4d402caa8755eb74afc"]
 MOM_PAGE = "https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx"
 MOM_PREFIXES = ["mrsd_4_annl_emp_chg_by_ind_", "mrsd_3_qtly_emp_chg_by_ind_"]
 
-SINGSTAT_PAGE_POINTS = 5000  # server-side cap per response, regardless of requested limit
 DATAGOV_MIN_INTERVAL_S = 3.0  # 4 datastore calls / 10 s without an API key
 
 
@@ -115,12 +121,12 @@ def capture_singstat(rec: Recorder) -> None:
     for table in SINGSTAT_TABLES:
         offset, page = 0, 0
         while True:
-            url = (
-                f"https://tablebuilder.singstat.gov.sg/api/table/tabledata/{table}"
-                f"?limit={SINGSTAT_PAGE_POINTS}&offset={offset}"
-            )
             body = rec.record(
-                url, source="singstat", dataset=table, kind=f"tabledata-p{page:02d}", ext="json"
+                tabledata_url(table, offset),
+                source="singstat",
+                dataset=table,
+                kind=f"tabledata-p{page:02d}",
+                ext="json",
             )
             rows = json.loads(body)["Data"]["row"]
             points = sum(len(r["columns"]) for r in rows)
@@ -134,18 +140,17 @@ def capture_singstat(rec: Recorder) -> None:
 def capture_datagov(rec: Recorder) -> None:
     for ds in DATAGOV_DATASETS:
         rec.record(
-            f"https://api-production.data.gov.sg/v2/public/api/datasets/{ds}/metadata",
+            metadata_url(ds),
             source="datagov",
             dataset=ds,
             kind="metadata",
             ext="json",
             datagov=True,
         )
-        offset, page, limit = 0, 0, 1000
+        offset, page = 0, 0
         while True:
-            url = f"https://data.gov.sg/api/action/datastore_search?resource_id={ds}&limit={limit}&offset={offset}"
             body = rec.record(
-                url,
+                datastore_url(ds, offset),
                 source="datagov",
                 dataset=ds,
                 kind=f"datastore-p{page:02d}",

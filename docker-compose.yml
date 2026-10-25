@@ -10,6 +10,8 @@ x-backend: &backend
     DATABASE_URL: postgresql+asyncpg://policy:policy@postgres:5432/policy
     REDIS_URL: redis://redis:6379/0
     CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
+    DATA_DIR: /app/data
+    LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-bedrock,openai}
   volumes:
     - ./data:/app/data:ro
 

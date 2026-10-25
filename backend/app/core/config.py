@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, ValidationInfo, field_validator
@@ -32,14 +33,17 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-5.5"
 
-    # Data (plan §4.5-4.6)
+    # Data (plan §4.5-4.6). DATA_DIR holds the manifest, taxonomy and snapshots.
     data_mode: Literal["live", "snapshot"] = "live"
+    data_dir: Path = Path(__file__).resolve().parents[3] / "data"
     datagov_api_key: SecretStr | None = None
 
     # Dev/demo only; forced off in prod (plan §2).
     enable_fault_injection: bool = False
 
     health_check_timeout_s: float = Field(default=2.0, gt=0)
+    # Active-time budget for one analysis execution (plan §3.5).
+    analysis_deadline_s: float = Field(default=240.0, gt=0)
 
     @field_validator("llm_provider_order", "cors_origins", mode="before")
     @classmethod

@@ -888,3 +888,31 @@ Recorded as evidence. Raw files are in `eval/results/probe/` and `data/snapshots
 - **Raw bytes are not a stable identity:** two captures of unchanged data differed byte-wise. SingStat stamps `dateGenerated` on every response, and MOM's HTML carries random CSS IDs. Normalised-artifact identity (§4.6) and the F3 fingerprint must therefore hash the **normalised content** (observations + source metadata + parser/taxonomy versions), never the raw-payload hash. The raw hash stays as provenance only.
 
 **Version deviation:** the frontend was scaffolded on **Next.js 16.4.3**, not 15. Node 22 is the baseline.
+
+---
+
+## Verified vertical slice: outcomes and design changes
+
+All of the following was verified live: the example query on Bedrock primary, on OpenAI primary, and through the UI.
+
+**Design changes driven by live runs**
+- **Claims are composed by the platform.** The agent supplies an optional short lead-in (8 words or fewer, no digits) and at most two assertions. The renderer writes the sentence.
+  - Why: free prose around slots produced garbled, duplicated statements.
+  - Effect: drafts that restate already-verified statements are refused.
+- **Public rationale travels as a required tool argument.** Nova returns its explanation only as private `reasoning_content`, which the router strips, so message text cannot carry it.
+- **The tool-call budget is enforced per call.** Every skipped call gets an answer, and `compute` is capped per round.
+  - Why: Nova issues large parallel batches; one run made 34 `value_at` calls.
+- **Flows are refused for endpoint differences**, and a `cumulative` tool replaces them. `list_evidence` offers eligible suggested computations with exact arguments.
+- **The cross-platform consistency check runs automatically** whenever a selected series has a catalogued mirror. It is quality control, not an LLM choice.
+  - The wide-format Data.gov.sg mirror of M182841 is now supported, and matches SingStat exactly.
+  - Its `na` cells for 2001–2003 are periods SingStat does not publish; they are not conflicting values.
+- **The qualitative narrative check was pulled forward from M2.** Deterministic checks cannot catch a plausible sentence with invented facts.
+  - The judge prefers the other provider. A rejected summary gets one rewrite, then is omitted.
+  - Bug found in the process: the narrative writer had been receiving claim *templates*, not the rendered findings.
+- **Argument mistakes (`INVALID_WINDOW`) are agent errors, not data limitations.** They never reach the report or the status.
+- **Next.js Cache Components are disabled.** The analysis route renders on request.
+  - Why: under Partial Prerendering the Suspense boundary never resolved on the client, and the app uses no `use cache`.
+
+**Known gaps carried into M2**
+- **The reconciler is not implemented yet** (lease expiry, re-dispatch of unacknowledged intents). An analysis whose worker is replaced mid-run stays `running`, as observed once during a stack rebuild.
+- **The epoch-fenced checkpointer, clarification interrupt, cancel endpoint and MOM Excel connector are still to build.**
