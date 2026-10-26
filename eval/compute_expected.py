@@ -263,18 +263,35 @@ def expected() -> dict:
     return {"snapshots_captured_at": captured, "computations": out}
 
 
+# Recomputing on another platform can change the last digits of float results (e.g. a different BLAS
+# behind the 2x2 algebra). The stored values are current if they match to far tighter than any gate.
+FRESHNESS_REL_TOL = 1e-12
+
+
+def matches(stored: object, fresh: object) -> bool:
+    """Same structure and strings; numbers equal to FRESHNESS_REL_TOL."""
+    if isinstance(stored, dict) and isinstance(fresh, dict):
+        return stored.keys() == fresh.keys() and all(matches(stored[k], fresh[k]) for k in stored)
+    if isinstance(stored, int | float) and isinstance(fresh, int | float):
+        return math.isclose(stored, fresh, rel_tol=FRESHNESS_REL_TOL, abs_tol=0.0)
+    return stored == fresh
+
+
+def is_current(target: Path) -> bool:
+    return target.exists() and matches(json.loads(target.read_text()), expected())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="fail if expected.json is out of date")
     args = parser.parse_args()
-    text = json.dumps(expected(), indent=2, sort_keys=True) + "\n"
     target = GOLDEN / "expected.json"
     if args.check:
-        if not target.exists() or target.read_text() != text:
+        if not is_current(target):
             print("eval/golden/expected.json is stale: rerun eval/compute_expected.py", file=sys.stderr)
             return 1
         return 0
-    target.write_text(text)
+    target.write_text(json.dumps(expected(), indent=2, sort_keys=True) + "\n")
     print(f"wrote {target.relative_to(ROOT)}")
     return 0
 

@@ -21,15 +21,14 @@ from app.evaluation.golden import expected, golden_dir, golden_series
 
 
 def expectations_are_current() -> bool:
-    """expected.json matches what the independent script computes from today's snapshots."""
+    """expected.json still describes today's snapshots, as the independent script computes them."""
     spec = importlib.util.spec_from_file_location(
         "compute_expected", golden_dir().parent / "compute_expected.py"
     )
     assert spec is not None and spec.loader is not None
     script = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(script)
-    current = json.dumps(script.expected(), indent=2, sort_keys=True) + "\n"
-    return (golden_dir() / "expected.json").read_text() == current
+    return bool(script.is_current(golden_dir() / "expected.json"))
 
 
 async def run() -> dict[str, Any]:

@@ -161,3 +161,25 @@ async def test_a_rejection_by_the_wrong_rule_is_not_detection(monkeypatch, serie
         assert summary["categories"][category]["detected"] == 0
         assert len(summary["categories"][category]["misattributed"]) == 2
     assert not summary["gate_passed"]
+
+
+def test_freshness_ignores_cross_platform_float_noise_but_not_real_changes():
+    import copy
+    import importlib.util
+    import json
+
+    spec = importlib.util.spec_from_file_location(
+        "compute_expected", golden_dir().parent / "compute_expected.py"
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    stored, fresh = json.loads((golden_dir() / "expected.json").read_text()), script.expected()
+
+    noisy = copy.deepcopy(stored)
+    noisy["computations"]["C09"]["fields"]["slope_ci_low"]["value"] *= 1 + 1e-14  # another BLAS
+    assert script.matches(noisy, fresh)
+    for path, value in ((("C01", "end_value", "value"), 999.0), (("C01", "end_value", "unit"), "vacancies")):
+        changed = copy.deepcopy(stored)
+        changed["computations"][path[0]]["fields"][path[1]][path[2]] = value
+        assert not script.matches(changed, fresh), path
