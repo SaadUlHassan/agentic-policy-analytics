@@ -102,6 +102,7 @@ def build_report(
                 {
                     "series_key": k,
                     "dataset_id": s.source.dataset_id,
+                    "artifact_id": s.source.artifact_id,
                     "subject": s.source.identity.subject(),
                     "reason": s.reason,
                 }

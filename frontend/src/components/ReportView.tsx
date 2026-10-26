@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { DataQualityPanel } from "@/components/DataQualityPanel";
 import { SeriesChart, splitChart } from "@/components/SeriesChart";
 import type { Citation, Report } from "@/lib/types";
@@ -34,6 +38,10 @@ function SourceItem({ c }: { c: Citation }) {
 /** Only verified findings reach this view; every number in them was rendered from a computation. */
 export function ReportView({ report }: { report: Report }) {
   const v = report.verification;
+  // Citations of the finding being read: the chart series they cite stay prominent.
+  const [highlight, setHighlight] = useState<ReadonlySet<string>>(new Set());
+  const focus = (citations: string[]) => () => setHighlight(new Set(citations));
+  const clear = () => setHighlight(new Set());
   return (
     <article aria-label="Report" className="flex flex-col gap-5">
       <header>
@@ -48,7 +56,15 @@ export function ReportView({ report }: { report: Report }) {
         ) : (
           <ol className="flex flex-col gap-2">
             {report.findings.map((f) => (
-              <li key={f.id} className="rounded-lg border border-border bg-surface p-3 text-sm">
+              <li
+                key={f.id}
+                tabIndex={0}
+                onMouseEnter={focus(f.citations)}
+                onFocus={focus(f.citations)}
+                onMouseLeave={clear}
+                onBlur={clear}
+                className="rounded-lg border border-border bg-surface p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--series-1)]"
+              >
                 {f.kind === "association" && (
                   <span className="mr-2 rounded border border-border px-1 text-xs text-ink-2">Exploratory association</span>
                 )}
@@ -74,7 +90,7 @@ export function ReportView({ report }: { report: Report }) {
         <section aria-label="Charts" className="flex flex-col gap-3">
           <h3 className="text-base font-semibold">Source data</h3>
           {report.charts.flatMap(splitChart).map((chart) => (
-            <SeriesChart key={chart.id} chart={chart} />
+            <SeriesChart key={chart.id} chart={chart} highlight={highlight} />
           ))}
         </section>
       )}

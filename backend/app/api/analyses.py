@@ -5,18 +5,31 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import json
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents import export as exports
 from app.api.problems import ProblemError
-from app.db.models import TERMINAL_STATUSES, Analysis, AnalysisEvent, AnalysisStatus, ReportRow
+from app.core.config import get_settings
+from app.data.models import NormalizedDataset
+from app.db.models import (
+    TERMINAL_STATUSES,
+    Analysis,
+    AnalysisArtifact,
+    AnalysisEvent,
+    AnalysisStatus,
+    DatasetArtifact,
+    LLMCall,
+    ReportRow,
+)
 from app.db.session import get_sessionmaker
 from app.events.stream import PAGE_SIZE, events_after
 from app.jobs.lifecycle import (
@@ -29,6 +42,7 @@ from app.jobs.lifecycle import (
     submit_clarification,
 )
 from app.jobs.writer import event_channel
+from app.llm.pricing import usage_summary
 
 log = structlog.get_logger()
 router = APIRouter(tags=["analyses"])
@@ -135,9 +149,14 @@ def _decode_cursor(cursor: str) -> tuple[datetime, str]:
 
 @router.get("/api/analyses")
 async def list_analyses(
-    sessions: Sessions, limit: Annotated[int, Query(ge=1, le=100)] = 20, cursor: str | None = None
+    sessions: Sessions,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: str | None = None,
+    status: AnalysisStatus | None = None,
 ) -> dict[str, Any]:
     stmt = select(Analysis).order_by(Analysis.created_at.desc(), Analysis.id.desc()).limit(limit + 1)
+    if status is not None:
+        stmt = stmt.where(Analysis.status == status)
     if cursor:
         created, analysis_id = _decode_cursor(cursor)
         stmt = stmt.where(
@@ -161,6 +180,11 @@ async def get_analysis(analysis_id: str, sessions: Sessions) -> dict[str, Any]:
         if analysis is None:
             raise ProblemError(404, "ANALYSIS_NOT_FOUND", "Analysis not found")
         report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+        calls = await session.scalars(select(LLMCall).where(LLMCall.analysis_id == analysis_id))
+        usage = {
+            **usage_summary(calls, get_settings().llm_prices),
+            "active_ms": analysis.active_ms_used,
+        }
         question = None
         if analysis.status == AnalysisStatus.AWAITING_INPUT:
             question = await session.scalar(
@@ -176,8 +200,56 @@ async def get_analysis(analysis_id: str, sessions: Sessions) -> dict[str, Any]:
         "error": analysis.error,
         "clarification": question,
         "cancel_requested": analysis.cancel_requested_at is not None,
+        "usage": usage,
         "last_event_seq": analysis.last_event_seq,
     }
+
+
+_EXPORT_TYPES = {
+    "md": ("text/markdown; charset=utf-8", "md"),
+    "json": ("application/json", "json"),
+    "csv": ("text/csv; charset=utf-8", "csv"),
+}
+
+
+@router.get("/api/analyses/{analysis_id}/export")
+async def export(
+    analysis_id: str, sessions: Sessions, format: Literal["md", "json", "csv"] = "md"
+) -> Response:
+    """The finished, verified result as stored: Markdown, a JSON bundle with pinned dataset
+    versions, or a CSV of the source observations the findings rest on."""
+    async with sessions() as session:
+        analysis = await session.get(Analysis, analysis_id)
+        if analysis is None:
+            raise ProblemError(404, "ANALYSIS_NOT_FOUND", "Analysis not found")
+        report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+        if report is None:
+            raise ProblemError(
+                409, "REPORT_NOT_AVAILABLE", "No report to export", f"the analysis is {analysis.status}"
+            )
+        artifacts = await session.scalars(
+            select(DatasetArtifact)
+            .join(AnalysisArtifact, AnalysisArtifact.artifact_id == DatasetArtifact.artifact_id)
+            .where(AnalysisArtifact.analysis_id == analysis_id)
+        )
+        datasets = {a.artifact_id: NormalizedDataset.model_validate(a.content) for a in artifacts}
+    meta = {
+        **_summary(analysis).model_dump(mode="json"),
+        "graph_version": analysis.graph_version,
+        "prompt_version": analysis.prompt_version,
+    }
+    if format == "json":
+        body = json.dumps(exports.to_bundle(meta, report, datasets), indent=2)
+    elif format == "csv":
+        body = exports.to_csv(exports.observation_rows(report, datasets))
+    else:
+        body = exports.to_markdown(meta, report)
+    media_type, ext = _EXPORT_TYPES[format]
+    return Response(
+        body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="analysis-{analysis_id}.{ext}"'},
+    )
 
 
 async def _is_terminal(sessions: async_sessionmaker[AsyncSession], analysis_id: str) -> bool:

@@ -39,8 +39,17 @@ export const clarifyAnalysis = (id: string, version: number, answer: Clarificati
 export const cancelAnalysis = (id: string) =>
   request<{ id: string; status: string }>(`/api/analyses/${encodeURIComponent(id)}/cancel`, { method: "POST" });
 
-export const listAnalyses = (limit = 20) =>
-  request<{ items: AnalysisSummary[]; next_cursor: string | null }>(`/api/analyses?limit=${limit}`);
+export function listAnalyses({ limit = 20, cursor, status }: { limit?: number; cursor?: string | null; status?: string } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  if (status) params.set("status", status);
+  return request<{ items: AnalysisSummary[]; next_cursor: string | null }>(`/api/analyses?${params}`);
+}
+
+export type ExportFormat = "md" | "json" | "csv";
+
+export const exportUrl = (id: string, format: ExportFormat) =>
+  `${API_URL}/api/analyses/${encodeURIComponent(id)}/export?format=${format}`;
 
 export function eventStreamUrl(id: string, afterSeq: number): string {
   const base = API_URL.replace(/^http/, "ws");

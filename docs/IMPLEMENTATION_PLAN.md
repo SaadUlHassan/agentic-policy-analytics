@@ -1046,3 +1046,22 @@ All of the following was verified live: the example query on Bedrock primary, on
 - The narrative check was recorded and disclosed as not independent.
 - The panel listed four datasets: two as evidence, two as cross-checks.
 
+## M3 outcomes: exports, history and dashboard
+
+**Delivered:** exports, a history status filter with paging, a usage summary, and chart interactions.
+
+**Decisions taken while building:**
+- **Exports are built only from what was stored when the analysis finished** (`GET /api/analyses/{id}/export?format=md|json|csv`). Nothing is recomputed or regenerated, so an export matches what the researcher saw.
+  - Markdown: the readable report.
+  - JSON bundle: the analysis, the verified report and every pinned dataset version (identity, provenance, raw payload hashes).
+  - CSV: the exact stored observations of each selected series in the plan window: value, source marker, raw source text, unit, scale and citation.
+  - Drafts are never exportable, because only verified findings reach the report. Exporting before a report exists is a `409 REPORT_NOT_AVAILABLE`.
+  - The report's selected series now record their `artifact_id`. Older reports resolve the dataset version through the analysis's stored artifacts.
+- **Cost is shown only when every model used has a configured price** (`LLM_PRICES`, USD per million input and output tokens). Otherwise the UI says "cost not configured" rather than showing a partial total; prices are configuration, never guesses. Calls, tokens, LLM latency, active time and the provider mix are always shown.
+- **History** filters by status and pages with the existing keyset cursor ("Load more").
+- **Charts:**
+  - Series can be toggled; at least one stays visible, and colours stay with their series.
+  - A period range filter applies to both the chart and the table view.
+  - Hovering or focusing a finding highlights the chart series it cites.
+  - Tables scroll horizontally on narrow screens.
+
