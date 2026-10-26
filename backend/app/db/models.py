@@ -6,7 +6,17 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -108,6 +118,23 @@ class DatasetArtifact(Base):
     dataset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = _now()
+
+
+class RawPayloadRow(Base):
+    """Source bytes exactly as received, by SHA-256 (plan §4.6): the provenance behind every
+    dataset artifact (`Provenance.raw_sha256`). Responses that can carry credentials are never
+    recorded (see Fetcher.call)."""
+
+    __tablename__ = "raw_payloads"
+
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128))
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    body: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    from_snapshot: Mapped[bool] = mapped_column(nullable=False)
     created_at: Mapped[datetime] = _now()
 
 

@@ -24,7 +24,8 @@ from app.agents.plan import ResearchPlan
 from app.agents.report import build_report
 from app.analytics.results import Computation
 from app.connectors.catalog import get_catalog
-from app.connectors.http import Fetcher, get_snapshot_store
+from app.connectors.http import Fetcher, api_keys, get_snapshot_store
+from app.connectors.ratelimit import SharedRateLimiter
 from app.core.config import Provider, Settings
 from app.data.models import NormalizedDataset
 from app.data.taxonomy import get_taxonomy
@@ -123,7 +124,12 @@ async def execute(
         writer=writer,
         catalog=get_catalog(),
         taxonomy=get_taxonomy(),
-        fetcher=Fetcher(mode=settings.data_mode, snapshots=get_snapshot_store()),
+        fetcher=Fetcher(
+            mode=settings.data_mode,
+            snapshots=get_snapshot_store(),
+            keys=api_keys(settings),
+            limiter=SharedRateLimiter(publisher),
+        ),
         deadline=clock.started + remaining_s,
     )
 

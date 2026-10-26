@@ -49,14 +49,17 @@ platforms:
     name: MOM Statistics (Manpower Research & Statistics Department)
     publisher: Ministry of Manpower
     index_page: https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx
+    human_url: https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx
     auth: none
+    rate_limits: none published; one request a second is used
     discovery: >-
       File names embed the release date (DDMMYYYY), e.g. mrsd_4_annl_emp_chg_by_ind_20032026.xlsx.
       Discover by stable prefix on the index page and pick the newest; fall back to last-known URL,
       then snapshot.
     markers:
       "-": {code: nil_or_negligible, meaning: "Nil or negligible",
-            evidence: "legend in SSIC2020 sheet of mrsd_3/mrsd_4 workbooks"}
+            evidence: "legend in SSIC2020 sheet of mrsd_3/mrsd_4 workbooks; re-checked on every fetch"}
+      "n.a.": {code: unknown, meaning: unverified, evidence: "appears only in the CSV files, which carry no legend"}
     licence: unverified
 
 # Structured fields used by the connectors and analytics:
@@ -112,7 +115,8 @@ datasets:
       - {scheme: SSIC2020, from: "2009-Q1"}
       - {scheme: SSIC2005, from: "2002-Q1", to: "2008-Q4"}
     coverage: "2017-Q1 onwards for Information & Communications"
-    note: "MOM's mrsd_3 file reports the same statistic in THOUSANDS; SingStat reports persons."
+    note: "MOM's mrsd_3 file reports the same statistic in THOUSANDS (0.1 precision); SingStat reports persons."
+    mirrors: [mrsd_3_qtly_emp_chg_by_ind]
 
   - id: M184071
     platform: singstat
@@ -230,29 +234,65 @@ datasets:
   - id: mrsd_4_annl_emp_chg_by_ind
     platform: mom
     origin_agency: MOM
-    title: Annual Employment Change by Industry
+    title: Annual Employment Change by Industry (SSIC 2020)
+    description: >-
+      Change in the number of persons employed between the end of each year and the end of the
+      previous year, by industry. Published by MOM as a release-dated Excel workbook and CSV.
+    keywords: [employment change, employment growth, net hiring, jobs added, industry, annual]
     format: [xlsx, csv]
-    catalogued: false
-    frequency: annual
+    metric: employment_change
     measure_type: flow
+    reference_convention: year_end_difference
+    population: total_employment
+    frequency: annual
     unit: persons
     scale: 1000
+    precision: 0.1
+    classification:
+      - {scheme: SSIC2020, from: "2009"}
+    sheet: SSIC2020
+    # CSV fallback columns. The CSV lists only the lowest-level industries (no sector totals).
+    fields: {period: year, label: industry3, value: employment_change}
+    last_known:
+      xlsx: https://stats.mom.gov.sg/iMAS_Tables1/Time-Series-Table/mrsd_4_annl_emp_chg_by_ind_20032026.xlsx
+      csv: https://stats.mom.gov.sg/iMAS_Tables1/CSV/mrsd_4_annl_emp_chg_by_ind_20032026.csv
     workbook_sheets: [Contents, "SSIC1996 & SSIC2000", SSIC2005, SSIC2020]
-    csv_fields: [year, industry1, industry2, industry3, employment_change]
+    note: >-
+      The SSIC2020 sheet starts in 2009; earlier sheets use other SSIC editions and are not read.
+      The sheet misspells "Telecomunications" (a recorded taxonomy alias).
 
   - id: mrsd_3_qtly_emp_chg_by_ind
     platform: mom
     origin_agency: MOM
-    title: Quarterly Employment Change by Industry
+    title: Quarterly Employment Change by Industry (SSIC 2020)
+    description: >-
+      Change in the number of persons employed between the end of each quarter and the end of the
+      previous quarter, by industry. MOM's own release of the statistic SingStat republishes as
+      M183891.
+    keywords: [employment change, employment growth, net hiring, jobs added, industry, quarterly]
     format: [xlsx, csv]
-    catalogued: false
-    frequency: quarterly
+    metric: employment_change
     measure_type: flow
+    reference_convention: quarter_end_difference
+    population: total_employment
+    frequency: quarterly
     unit: persons
     scale: 1000
+    precision: 0.1
+    classification:
+      - {scheme: SSIC2020, from: "2009-Q1"}
+    sheet: SSIC2020
+    fields: {period: quarter, label: industry3, value: employment_change}
+    last_known:
+      xlsx: https://stats.mom.gov.sg/iMAS_Tables1/Time-Series-Table/mrsd_3_qtly_emp_chg_by_ind_21092026.xlsx
+      csv: https://stats.mom.gov.sg/iMAS_Tables1/CSV/mrsd_3_qtly_emp_chg_by_ind_21092026.csv
+    mirror_of: M183891
     workbook_sheets: [Contents, "SSIC1996 & SSIC2000", SSIC2005, SSIC2020]
-    csv_fields: [quarter, industry1, industry2, industry3, employment_change]
-    quirks: "CSV carries 6 trailing empty columns (Unnamed: 5..10)."
+    quirks: >-
+      The SSIC2020 sheet is six side-by-side blocks of three years each. The newest year's first
+      quarter header reads "1Q^", a footnote mark the sheet does not explain. The CSV carries 6
+      trailing empty columns and uses "n.a.", which no legend defines.
+    consistency_check: "ICT 2017-Q1..2026-Q2: all 37 shared quarters agree with M183891 at 0.1 thousand"
 
 demo_correlation_pair:
   question: >-

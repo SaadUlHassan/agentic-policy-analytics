@@ -227,12 +227,13 @@
       "source": "datagov",
       "dataset": "d_3f17bbf67d31d4d402caa8755eb74afc",
       "kind": "download",
-      "url": "https://api-open.data.gov.sg/v1/public/api/datasets/d_3f17bbf67d31d4d402caa8755eb74afc/poll-download -> pre-signed S3 URL (not recorded)",
+      "url": "https://api-open.data.gov.sg/v1/public/api/datasets/d_3f17bbf67d31d4d402caa8755eb74afc/poll-download",
       "path": "datagov/d_3f17bbf67d31d4d402caa8755eb74afc/download-d1097e7ba3442912.csv",
       "sha256": "d1097e7ba34429127796e05ec9579b8c477434e90fdc46c7292d119297388ab4",
       "bytes": 197818,
       "content_type": "application/octet-stream",
-      "retrieved_at": "2026-10-25T16:31:17+00:00"
+      "retrieved_at": "2026-10-25T16:31:17+00:00",
+      "note": "Keyed by the dataset's poll-download URL; the file came from a pre-signed URL that is never recorded."
     },
     {
       "source": "mom",

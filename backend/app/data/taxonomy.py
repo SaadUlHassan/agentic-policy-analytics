@@ -22,6 +22,10 @@ def normalise_label(label: str) -> str:
     return _WS.sub(" ", text).strip()
 
 
+def normalise_code(code: str) -> str:
+    return re.sub(r"\s+", "", code).upper()
+
+
 @dataclass(frozen=True)
 class Sector:
     scheme: str
@@ -29,6 +33,15 @@ class Sector:
     label: str
     code: str | None
     parent: str | None
+    # SSIC code ranges sources state for this sector (e.g. MOM's "J58-63"); empty if none recorded.
+    source_codes: tuple[str, ...] = ()
+
+    def contradicts(self, stated_code: str | None) -> bool:
+        """True when a source states a code for this label that belongs to another sector, e.g.
+        a row labelled with the parent's name but coded as one of its children."""
+        if not stated_code or not self.source_codes:
+            return False
+        return normalise_code(stated_code) not in self.source_codes
 
 
 class Taxonomy:
@@ -38,7 +51,8 @@ class Taxonomy:
         self._by_alias: dict[tuple[str, str], Sector] = {}
         for scheme, sectors in raw["schemes"].items():
             for key, spec in sectors.items():
-                sector = Sector(scheme, key, spec["label"], spec.get("code"), spec.get("parent"))
+                codes = tuple(normalise_code(c) for c in spec.get("source_codes", []))
+                sector = Sector(scheme, key, spec["label"], spec.get("code"), spec.get("parent"), codes)
                 self._sectors[(scheme, key)] = sector
                 for alias in [spec["label"], *spec.get("aliases", [])]:
                     self._by_alias[(scheme, normalise_label(alias))] = sector

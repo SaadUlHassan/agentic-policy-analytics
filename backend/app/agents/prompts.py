@@ -46,8 +46,8 @@ Rules:
 - Select a series only if it measures the planned sector and metric and covers the period. Reject series
   that do not fit (wrong sector level, missing years, wrong metric), giving the reason.
 - A parent sector and its subsector are different series; never treat one as the other.
-- Search results list `mirrors` / `mirror_of`: the same statistic republished on another platform. When a
-  selected series has a mirror, fetch it and run check_consistency on the two; report any disagreement.
+- Search results list `mirrors` / `mirror_of`: the same statistic republished on another platform.
+  Selecting a series cross-checks it against its mirror automatically; select only one of the two.
 - Call finish when the selected series cover the plan, or when nothing more can be found.
 Sector keys: {json.dumps(sectors)}"""
 

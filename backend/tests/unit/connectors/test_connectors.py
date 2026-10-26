@@ -9,6 +9,7 @@ import respx
 from app.connectors import datagov, singstat
 from app.connectors.catalog import get_catalog
 from app.connectors.http import Fetcher, SnapshotStore, SourceUnavailable, get_snapshot_store
+from app.connectors.ratelimit import SharedRateLimiter
 from app.connectors.registry import UnknownDataset, fetch
 from app.data.taxonomy import get_taxonomy
 
@@ -30,7 +31,19 @@ def _row(series_no, label, cols, uom="Thousand"):
     }
 
 
+class Unthrottled(SharedRateLimiter):
+    """Records which limits were applied, without waiting."""
+
+    def __init__(self) -> None:
+        super().__init__(None)
+        self.applied: list[tuple[str, str]] = []
+
+    async def wait(self, limit, tier):
+        self.applied.append((limit.name, tier))
+
+
 def _live(tmp_path, **kw):
+    kw.setdefault("limiter", Unthrottled())
     return Fetcher(mode="live", snapshots=SnapshotStore(tmp_path), backoff_s=0, **kw)
 
 
@@ -99,9 +112,9 @@ async def test_unit_disagreeing_with_catalogue_is_an_error_issue(tmp_path):
 
 
 @respx.mock
-async def test_datagov_pages_until_total_and_retries_throttled_body(tmp_path, monkeypatch):
+async def test_datagov_falls_back_to_datastore_pages_and_retries_throttled_body(tmp_path, monkeypatch):
     monkeypatch.setattr(datagov, "PAGE_RECORDS", 2)
-    monkeypatch.setattr(datagov._limiter, "min_interval_s", 0)
+    respx.get(f"{datagov.OPEN_API}/{VACANCIES_Q}/initiate-download").respond(503)
     rec = lambda q, v: {"quarter": q, "industry": "information and communications", "job_vacancy": v}  # noqa: E731
     respx.get(datagov.metadata_url(VACANCIES_Q)).respond(
         json={"data": {"name": "JV", "lastUpdatedAt": "2026"}}
@@ -126,11 +139,12 @@ async def test_datagov_pages_until_total_and_retries_throttled_body(tmp_path, mo
         ("2024-Q3", None),
     ]
     assert first.call_count == 2
+    assert any(i.code == "FORMAT_FALLBACK" for i in ds.quality)
 
 
 async def test_uncatalogued_dataset_is_refused():
     with pytest.raises(UnknownDataset):
-        await fetch("mrsd_4_annl_emp_chg_by_ind", CATALOG, TAXONOMY, _live_snapshot())
+        await fetch("M999999", CATALOG, TAXONOMY, _live_snapshot())
 
 
 def _live_snapshot():

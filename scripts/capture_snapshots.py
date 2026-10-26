@@ -23,7 +23,7 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 # Snapshot mode looks payloads up by URL, so capture must build URLs exactly as the connectors do.
-from app.connectors.datagov import datastore_url, metadata_url  # noqa: E402
+from app.connectors.datagov import datastore_url, download_url, metadata_url  # noqa: E402
 from app.connectors.singstat import PAGE_POINTS as SINGSTAT_PAGE_POINTS  # noqa: E402
 from app.connectors.singstat import tabledata_url  # noqa: E402
 
@@ -179,7 +179,8 @@ def capture_datagov(rec: Recorder) -> None:
                     dataset=ds,
                     kind="download",
                     ext="csv",
-                    recorded_url=f"{api}/poll-download -> pre-signed S3 URL (not recorded)",
+                    # Snapshot mode looks the file up by this stable URL, as the connector does.
+                    recorded_url=download_url(ds),
                 )
                 break
             time.sleep(3)

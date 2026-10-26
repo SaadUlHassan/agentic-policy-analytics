@@ -56,7 +56,7 @@ async def sessions(database_url):
         await conn.execute(
             text(
                 "TRUNCATE analyses, outbox, analysis_events, dataset_artifacts, analysis_artifacts, "
-                "computations, reports, llm_calls RESTART IDENTITY CASCADE"
+                "computations, reports, llm_calls, raw_payloads RESTART IDENTITY CASCADE"
             )
         )
     yield async_sessionmaker(engine, expire_on_commit=False)
@@ -72,3 +72,21 @@ async def checkpoints(database_url):
         await conn.execute("TRUNCATE checkpoints, checkpoint_blobs, checkpoint_writes")
     yield pool
     await pool.close()
+
+
+@pytest.fixture
+async def redis_client():
+    import redis.asyncio as redis
+
+    client = redis.from_url(os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15"))
+    try:
+        await client.ping()
+    except redis.RedisError as exc:
+        await client.aclose()
+        if os.environ.get("REQUIRE_INTEGRATION"):
+            raise RuntimeError(f"Redis required for integration tests: {exc}") from exc
+        pytest.skip(f"Redis not reachable for integration tests: {exc}")
+    await client.flushdb()
+    yield client
+    await client.flushdb()
+    await client.aclose()

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from app.connectors import datagov, singstat
+from app.connectors import datagov, mom, singstat
 from app.connectors.catalog import Catalog
 from app.connectors.http import Fetcher
 from app.data.models import NormalizedDataset
 from app.data.taxonomy import Taxonomy
 
-_FETCHERS = {"singstat": singstat.fetch_table, "datagov": datagov.fetch_dataset}
+_FETCHERS = {"singstat": singstat.fetch_table, "datagov": datagov.fetch_dataset, "mom": mom.fetch_timeseries}
 
 
 class UnknownDataset(Exception):

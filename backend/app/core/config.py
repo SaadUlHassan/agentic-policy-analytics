@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     data_mode: Literal["live", "snapshot"] = "live"
     data_dir: Path = Path(__file__).resolve().parents[3] / "data"
     datagov_api_key: SecretStr | None = None
+    # Rate-limit tier the key was issued for (guide.data.gov.sg "API Rate Limits").
+    datagov_key_tier: Literal["dev", "prod"] = "dev"
 
     # Dev/demo only; forced off in prod (plan §2).
     enable_fault_injection: bool = False

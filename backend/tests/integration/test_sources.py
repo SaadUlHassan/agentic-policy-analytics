@@ -1,0 +1,78 @@
+"""Shared source rate limits and the raw-payload store, against real Redis and Postgres."""
+
+from __future__ import annotations
+
+import asyncio
+import time
+
+import pytest
+from sqlalchemy import text
+
+from app.connectors.catalog import get_catalog
+from app.connectors.http import Fetcher, get_snapshot_store
+from app.connectors.ratelimit import RateLimit, SharedRateLimiter
+from app.connectors.registry import fetch
+from app.data.taxonomy import get_taxonomy
+from app.jobs.lifecycle import claim
+from app.jobs.writer import FencedWriter
+from tests.integration.test_lifecycle import _new
+
+pytestmark = pytest.mark.integration
+
+
+async def test_rate_limit_is_shared_by_every_worker(redis_client):
+    limit = RateLimit("test-shared", 1.0, {"none": 10})  # one call per 0.11 s across all workers
+    workers = [SharedRateLimiter(redis_client), SharedRateLimiter(redis_client)]
+    starts: list[float] = []
+
+    async def call(limiter: SharedRateLimiter) -> None:
+        await limiter.wait(limit, "none")
+        starts.append(time.monotonic())
+
+    await asyncio.gather(*(call(workers[i % 2]) for i in range(6)))
+
+    starts.sort()
+    gaps = [b - a for a, b in zip(starts, starts[1:], strict=False)]
+    assert min(gaps) >= limit.interval_s("none") * 0.9, gaps
+
+
+async def test_dataset_raw_bytes_are_stored_once_by_hash(sessions):
+    analysis_id, intent = await _new(sessions)
+    c = await claim(sessions, analysis_id, intent, "w")
+    writer = FencedWriter(sessions, None, analysis_id, c.epoch)
+    fetcher = Fetcher(mode="snapshot", snapshots=get_snapshot_store())
+    dataset = await fetch("mrsd_3_qtly_emp_chg_by_ind", get_catalog(), get_taxonomy(), fetcher)
+    used = [fetcher.payloads[h] for h in dataset.provenance.raw_sha256]
+
+    await writer.save_artifact(dataset, used)
+    await writer.save_artifact(dataset, used)
+
+    async with sessions() as session:
+        rows = (await session.execute(text("SELECT sha256, url, body, size_bytes FROM raw_payloads"))).all()
+    (row,) = rows
+    assert row.sha256 == dataset.provenance.raw_sha256[0] and bytes(row.body) == used[0].body
+    assert row.url.endswith(".xlsx") and row.size_bytes == len(used[0].body)
+
+
+async def test_a_changed_workbook_is_stored_and_reloaded_with_its_own_quality(sessions):
+    from app.agents.evidence import EvidenceStore, to_refs
+    from app.jobs.runner import _load_evidence
+    from tests.unit.data.test_quality_mutations import MOM_Q, MOM_Q_XLSX, _cells, _edit_workbook, _fetch
+
+    def hundreds(sheet) -> None:
+        for cell in _cells(sheet, lambda v: v == "In Thousands"):
+            cell.value = "In Hundreds"
+
+    clean, changed = await _fetch(MOM_Q, {}), await _fetch(MOM_Q, {MOM_Q_XLSX: _edit_workbook(hundreds)})
+    analysis_id, intent = await _new(sessions)
+    c = await claim(sessions, analysis_id, intent, "w")
+    writer = FencedWriter(sessions, None, analysis_id, c.epoch)
+    await writer.save_artifact(clean)  # the clean copy was stored first...
+    await writer.save_artifact(changed)
+
+    # ...but resuming with the changed workbook restores the changed workbook, errors included.
+    restored = await _load_evidence(
+        sessions, analysis_id, to_refs(EvidenceStore(datasets={changed.artifact_id: changed}))
+    )
+    reloaded = restored.dataset(MOM_Q)
+    assert [i.code for i in reloaded.blocking_issues(reloaded.find("info_comms")[0])] == ["UNIT_MISMATCH"]
