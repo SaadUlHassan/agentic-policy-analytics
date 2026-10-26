@@ -28,7 +28,7 @@ const formatValue = (value: number) => value.toLocaleString(undefined, { maximum
 
 /** One unit per chart (never a dual axis). Values are the source observations, unmodified; the
  *  series toggles and period range only change what is shown, never the stored data.
- *  `highlight` holds citation ids: series cited by the finding in focus stay prominent. */
+ *  `highlight` holds series keys: the series behind the finding in focus stay prominent. */
 export function SeriesChart({ chart, highlight }: { chart: Chart; highlight?: ReadonlySet<string> }) {
   const [asTable, setAsTable] = useState(false);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
@@ -36,7 +36,7 @@ export function SeriesChart({ chart, highlight }: { chart: Chart; highlight?: Re
   const [range, setRange] = useState<[number, number]>([0, allPeriods.length - 1]);
   const periods = allPeriods.slice(range[0], range[1] + 1);
   const shown = chart.series.filter((s) => !hidden.has(s.series_key));
-  const dimmed = (citation: string) => Boolean(highlight?.size) && !highlight?.has(citation);
+  const dimmed = (seriesKey: string) => Boolean(highlight?.size) && !highlight?.has(seriesKey);
   const toggle = (key: string) =>
     setHidden((current) => {
       const next = new Set(current);
@@ -157,8 +157,8 @@ export function SeriesChart({ chart, highlight }: { chart: Chart; highlight?: Re
                     dataKey={s.series_key}
                     name={`${s.label} [${s.citation}]`}
                     stroke={SERIES_COLORS[i]}
-                    strokeOpacity={dimmed(s.citation) ? 0.25 : 1}
-                    strokeWidth={dimmed(s.citation) ? 2 : highlight?.size ? 3 : 2}
+                    strokeOpacity={dimmed(s.series_key) ? 0.25 : 1}
+                    strokeWidth={dimmed(s.series_key) ? 2 : highlight?.size ? 3 : 2}
                     dot={{ r: 4, strokeWidth: 2, fill: "var(--surface)" }}
                     activeDot={{ r: 5 }}
                     connectNulls={false}

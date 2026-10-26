@@ -96,3 +96,45 @@ def test_history_can_be_filtered_by_status(client, finished):  # noqa: F811
     completed = client.get("/api/analyses?status=completed").json()["items"]
     assert [a["id"] for a in completed] == [finished]
     assert client.get("/api/analyses?status=nonsense").status_code == 422
+
+
+async def test_the_bundle_shows_this_analysis_s_own_fetch_of_a_shared_artifact(client, sessions):  # noqa: F811
+    from app.connectors.catalog import get_catalog
+    from app.connectors.http import Fetcher, get_snapshot_store
+    from app.connectors.registry import fetch
+    from app.data.taxonomy import get_taxonomy
+    from app.db.models import AnalysisStatus
+    from app.jobs.lifecycle import claim
+    from app.jobs.writer import FencedWriter
+    from tests.integration.test_lifecycle import _new
+
+    stored_first = await fetch(
+        "M182841", get_catalog(), get_taxonomy(), Fetcher(mode="snapshot", snapshots=get_snapshot_store())
+    )
+    # The same values fetched again live later: same artifact, different provenance.
+    later = stored_first.model_copy(
+        update={
+            "provenance": stored_first.provenance.model_copy(
+                update={"from_snapshot": False, "raw_sha256": ["later"]}
+            )
+        }
+    )
+    first, intent = await _new(sessions)
+    c = await claim(sessions, first, intent, "first")
+    await FencedWriter(sessions, None, first, c.epoch).save_artifact(stored_first)
+    second, intent = await _new(sessions)
+    c = await claim(sessions, second, intent, "second")
+    writer = FencedWriter(sessions, None, second, c.epoch)
+    await writer.save_artifact(later)
+    await writer.finish(AnalysisStatus.COMPLETED, report={"findings": [], "citations": []})
+
+    (exported,) = client.get(f"/api/analyses/{second}/export?format=json").json()["datasets"]
+
+    assert exported["artifact_id"] == stored_first.artifact_id
+    assert exported["from_snapshot"] is False and exported["raw_sha256"] == ["later"]
+
+
+def test_each_finding_records_the_series_it_rests_on(client, finished):  # noqa: F811
+    report = client.get(f"/api/analyses/{finished}").json()["report"]
+    selected = {s["series_key"] for s in report["evidence"]["selected"]}
+    assert all(f["series"] and set(f["series"]) <= selected for f in report["findings"])

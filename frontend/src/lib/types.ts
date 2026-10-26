@@ -38,7 +38,13 @@ export type Plan = {
   rationale: string;
 };
 
-export type Finding = { id: string; kind: string; text: string; citations: string[] };
+export type Finding = {
+  id: string;
+  kind: string;
+  text: string;
+  citations: string[];
+  series?: string[]; // series keys the finding rests on (absent in reports stored before it existed)
+};
 
 export type ChartSeries = {
   series_key: string;

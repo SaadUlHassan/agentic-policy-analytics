@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { StatusBadge } from "@/components/StatusBadge";
 import { listAnalyses } from "@/lib/api";
@@ -24,6 +24,8 @@ export function HistoryList() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every filter change: a page requested under an older filter is discarded on arrival.
+  const generation = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,19 +43,23 @@ export function HistoryList() {
   }, [status]);
 
   async function loadMore() {
+    const requestedIn = generation.current;
     setLoading(true);
     try {
       const page = await listAnalyses({ cursor, status: status || undefined });
+      if (requestedIn !== generation.current) return;
       setItems((current) => [...(current ?? []), ...page.items]);
       setCursor(page.next_cursor);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (requestedIn === generation.current) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (requestedIn === generation.current) setLoading(false);
     }
   }
 
   function filterBy(next: "" | AnalysisStatus) {
+    generation.current += 1;
+    setLoading(false);
     setStatus(next);
     setItems(null);
     setCursor(null);

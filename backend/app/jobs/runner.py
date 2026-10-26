@@ -28,7 +28,7 @@ from app.connectors.http import Fetcher, api_keys, get_snapshot_store
 from app.connectors.ratelimit import SharedRateLimiter
 from app.core.config import Provider, Settings
 from app.core.faults import INJECTED, Faults
-from app.data.models import NormalizedDataset, Provenance, QualityIssue
+from app.data.models import NormalizedDataset
 from app.data.taxonomy import get_taxonomy
 from app.db.models import Analysis, AnalysisArtifact, AnalysisStatus, ComputationRow, DatasetArtifact
 from app.jobs.checkpoint import FencedPostgresSaver, Pool
@@ -244,15 +244,8 @@ async def _load_evidence(
             select(ComputationRow).where(ComputationRow.analysis_id == analysis_id)
         )
         datasets = {}
-        for content, fetch in rows:
-            dataset = NormalizedDataset.model_validate(content)
-            if fetch is not None:  # this analysis's own fetch, not whichever stored the artifact first
-                dataset = dataset.model_copy(
-                    update={
-                        "provenance": Provenance.model_validate(fetch["provenance"]),
-                        "quality": [QualityIssue.model_validate(i) for i in fetch["quality"]],
-                    }
-                )
+        for content, fetch_record in rows:
+            dataset = NormalizedDataset.model_validate(content).as_fetched(fetch_record)
             datasets[dataset.artifact_id] = dataset
         computed = {c.computation_id: Computation.model_validate(c.content) for c in computations}
     return from_refs(refs, datasets, computed)

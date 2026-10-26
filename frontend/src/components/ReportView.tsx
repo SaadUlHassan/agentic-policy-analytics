@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { DataQualityPanel } from "@/components/DataQualityPanel";
 import { SeriesChart, splitChart } from "@/components/SeriesChart";
-import type { Citation, Report } from "@/lib/types";
+import type { Citation, Finding, Report } from "@/lib/types";
 
 function CitationChip({ id }: { id: string }) {
   return (
@@ -38,9 +38,13 @@ function SourceItem({ c }: { c: Citation }) {
 /** Only verified findings reach this view; every number in them was rendered from a computation. */
 export function ReportView({ report }: { report: Report }) {
   const v = report.verification;
-  // Citations of the finding being read: the chart series they cite stay prominent.
+  // Series behind the finding being read stay prominent in the charts. A citation can cover several
+  // series of one dataset, so lineage is by series; older reports fall back to their citations.
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(new Set());
-  const focus = (citations: string[]) => () => setHighlight(new Set(citations));
+  const seriesOf = (f: Finding) =>
+    f.series ??
+    report.charts.flatMap((c) => c.series.filter((s) => f.citations.includes(s.citation)).map((s) => s.series_key));
+  const focus = (f: Finding) => () => setHighlight(new Set(seriesOf(f)));
   const clear = () => setHighlight(new Set());
   return (
     <article aria-label="Report" className="flex flex-col gap-5">
@@ -59,8 +63,8 @@ export function ReportView({ report }: { report: Report }) {
               <li
                 key={f.id}
                 tabIndex={0}
-                onMouseEnter={focus(f.citations)}
-                onFocus={focus(f.citations)}
+                onMouseEnter={focus(f)}
+                onFocus={focus(f)}
                 onMouseLeave={clear}
                 onBlur={clear}
                 className="rounded-lg border border-border bg-surface p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--series-1)]"

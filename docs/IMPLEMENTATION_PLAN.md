@@ -1056,12 +1056,13 @@ All of the following was verified live: the example query on Bedrock primary, on
   - JSON bundle: the analysis, the verified report and every pinned dataset version (identity, provenance, raw payload hashes).
   - CSV: the exact stored observations of each selected series in the plan window: value, source marker, raw source text, unit, scale and citation.
   - Drafts are never exportable, because only verified findings reach the report. Exporting before a report exists is a `409 REPORT_NOT_AVAILABLE`.
-  - The report's selected series now record their `artifact_id`. Older reports resolve the dataset version through the analysis's stored artifacts.
-- **Cost is shown only when every model used has a configured price** (`LLM_PRICES`, USD per million input and output tokens). Otherwise the UI says "cost not configured" rather than showing a partial total; prices are configuration, never guesses. Calls, tokens, LLM latency, active time and the provider mix are always shown.
-- **History** filters by status and pages with the existing keyset cursor ("Load more").
+  - The report's selected series now record their `artifact_id`. Older reports resolve the version their citation pins. When several versions are stored and none is pinned, nothing is exported rather than a guess.
+  - The JSON bundle shows each dataset as this analysis fetched it (its own retrieval time, snapshot use and raw hashes), using the same fetch-record overlay as resume.
+- **Cost is shown only when every model used has a configured price and every call reported its token usage** (`LLM_PRICES`, USD per million input and output tokens). Otherwise the UI says "cost not configured" rather than showing a partial total; prices are configuration, never guesses. Calls, tokens, LLM latency, active time and the provider mix are always shown.
+- **History** filters by status and pages with the existing keyset cursor ("Load more"). A page requested under an earlier filter is discarded when it arrives.
 - **Charts:**
   - Series can be toggled; at least one stays visible, and colours stay with their series.
   - A period range filter applies to both the chart and the table view.
-  - Hovering or focusing a finding highlights the chart series it cites.
+  - Hovering or focusing a finding highlights the chart series it rests on. Findings record the series keys behind their computations, because one citation can cover several sectors of a dataset; older reports fall back to citations.
   - Tables scroll horizontally on narrow screens.
 

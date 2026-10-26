@@ -227,12 +227,14 @@ async def export(
             raise ProblemError(
                 409, "REPORT_NOT_AVAILABLE", "No report to export", f"the analysis is {analysis.status}"
             )
-        artifacts = await session.scalars(
-            select(DatasetArtifact)
+        rows = await session.execute(
+            select(DatasetArtifact.content, AnalysisArtifact.fetch_record)
             .join(AnalysisArtifact, AnalysisArtifact.artifact_id == DatasetArtifact.artifact_id)
             .where(AnalysisArtifact.analysis_id == analysis_id)
         )
-        datasets = {a.artifact_id: NormalizedDataset.model_validate(a.content) for a in artifacts}
+        # As this analysis fetched them: its own retrieval time, snapshot use and raw hashes.
+        fetched = [NormalizedDataset.model_validate(c).as_fetched(f) for c, f in rows]
+        datasets = {d.artifact_id: d for d in fetched}
     meta = {
         **_summary(analysis).model_dump(mode="json"),
         "graph_version": analysis.graph_version,

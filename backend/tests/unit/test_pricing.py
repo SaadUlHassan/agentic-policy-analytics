@@ -25,3 +25,8 @@ def test_cost_is_computed_only_when_every_model_used_is_priced():
 
     partial = usage_summary([*calls, _call("m3")], {"m1": (1.0, 4.0)})
     assert partial["cost_usd"] is None and partial["unpriced_models"] == ["m3"]
+
+
+def test_a_call_without_token_usage_makes_the_cost_unknown_not_free():
+    summary = usage_summary([_call("m1"), _call("m1", tin=None, tout=None)], {"m1": (2.0, 4.0)})
+    assert summary["cost_usd"] is None and summary["calls_without_usage"] == 1

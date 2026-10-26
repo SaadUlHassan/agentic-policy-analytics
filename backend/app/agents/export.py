@@ -46,10 +46,13 @@ def observation_rows(report: dict[str, Any], datasets: dict[str, NormalizedDatas
     window = _plan_periods(report)
     cited = _citation_ids(report)
     rows = []
+    pinned_by_citation = {c["dataset_id"]: c["artifact_id"] for c in report.get("citations", [])}
     for selected in report.get("evidence", {}).get("selected", []):
-        dataset = datasets.get(selected.get("artifact_id", "")) or next(
-            (d for d in datasets.values() if d.dataset_id == selected["dataset_id"]), None
-        )
+        # The version the report relied on: recorded on the selection, else (older reports) the one
+        # its citation pins. Only an unambiguous single stored version is used as a last resort.
+        pinned = selected.get("artifact_id") or pinned_by_citation.get(selected["dataset_id"])
+        candidates = [d for d in datasets.values() if d.dataset_id == selected["dataset_id"]]
+        dataset = datasets.get(pinned or "") or (candidates[0] if len(candidates) == 1 else None)
         series = (
             next((s for s in dataset.series if s.key == selected["series_key"]), None) if dataset else None
         )
