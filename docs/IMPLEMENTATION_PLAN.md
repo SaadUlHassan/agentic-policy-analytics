@@ -992,3 +992,24 @@ All of the following was verified live: the example query on Bedrock primary, on
 
 **Not yet done:** the data-quality panel in the UI (area D).
 
+## M2 outcomes: exploratory correlation
+
+**Delivered:** `correlate` with declared pairing rules and refusal codes, association predicates with a strength rule, agent wiring, and golden values for the named pair.
+
+**Decisions taken while building:**
+- **Eligibility is checked in a fixed order:** classification and code set (`CLASSIFICATION_MISMATCH`), frequency (`FREQ_MISMATCH`), observation moment (`REFERENCE_MISMATCH`), a declared pairing rule at that lag (`NO_PAIRING_RULE`), then at least 12 aligned complete pairs (`INSUFFICIENT_PAIRS`) and no constant series (`CONSTANT_SERIES`).
+  - Annual year-end employment vs annual vacancies (a mean of four quarter ends) is refused with `REFERENCE_MISMATCH`, as planned.
+- **Pairing rules are oriented.** The leading series comes first; for stock × flow, lag 1 pairs the stock at the end of a quarter with the flow over the next quarter. Arguments given the other way round are reordered, not refused.
+- **Both members of a pair must lie in the window.** The named pair (M184071 vacancies × M183891 employment change, 2020-Q1..2024-Q4) gives n = 20 at lag 0 and n = 19 at lag 1. Incomplete pairs are skipped and listed, never filled.
+- **Descriptive output only:** Pearson r, Spearman ρ and the pair count, with no p-values (consecutive quarters are serially dependent). Population differences are recorded as caveats.
+- **Associations are stated with `assoc.positive`, `assoc.negative` or `assoc.weak`.** The positive and negative predicates need |r| ≥ 0.3; weak needs |r| < 0.3.
+  - They are allowed only in association claims on exploratory computations.
+  - The rendered text names both series and the lag, keeps the sign, and says "exploratory, not evidence of cause".
+  - The claim kind follows from the predicate, not from what the model calls it.
+- **Pairs are evaluated deterministically.** `list_evidence` evaluates every same-sector pair of selected series measuring different metrics. Eligible correlations are listed first under the leading series. Ineligible pairs are recorded once as refusals, visible in the timeline and the report.
+- **A repeated computation reuses the earlier result without spending the round's budget.** In a live run, the second analytics round had re-computed the same statistics and never reached the correlation.
+
+**Golden values (snapshot of 25 Oct 2026, independently recomputed in the tests):** lag 0 r = 0.468, ρ = 0.471 (n = 20); lag 1 r = 0.360, ρ = 0.311 (n = 19).
+
+**Verified live:** the demo question ("Analyse employment trends in the technology sector from 2020-2024") reported both correlations as exploratory associations. It also recorded `FREQ_MISMATCH` refusals for annual employment against the two quarterly series.
+

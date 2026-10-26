@@ -28,6 +28,8 @@ class ValueKind(StrEnum):
     MEAN = "mean"
     DIFFERENCE = "difference"
     TOTAL = "total"
+    COEFFICIENT = "coefficient"  # a correlation coefficient: unitless, in [-1, 1]
+    COUNT = "count"
 
 
 class Interpretation(StrEnum):
@@ -86,6 +88,12 @@ class RefusalCode(StrEnum):
     INSUFFICIENT_SPAN = "INSUFFICIENT_SPAN"
     INSUFFICIENT_POINTS = "INSUFFICIENT_POINTS"
     CONSTANT_SERIES = "CONSTANT_SERIES"
+    # correlate (plan §4.5)
+    CLASSIFICATION_MISMATCH = "CLASSIFICATION_MISMATCH"
+    FREQ_MISMATCH = "FREQ_MISMATCH"
+    REFERENCE_MISMATCH = "REFERENCE_MISMATCH"
+    NO_PAIRING_RULE = "NO_PAIRING_RULE"
+    INSUFFICIENT_PAIRS = "INSUFFICIENT_PAIRS"
 
 
 class Refusal(BaseModel):
@@ -94,6 +102,7 @@ class Refusal(BaseModel):
     detail: str
     params: dict[str, Any]
     series_key: str
+    other_series_key: str | None = None  # the second series of a refused correlation
 
 
 def fingerprint(tool: str, params: dict[str, Any], inputs: list[SeriesInput], taxonomy_version: str) -> str:

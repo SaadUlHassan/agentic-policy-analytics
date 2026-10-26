@@ -15,7 +15,9 @@ from pydantic import BaseModel, Field
 from app.agents.context import AgentContext
 from app.agents.evidence import ConsistencyCheck, Rejection, Selection
 from app.agents.plan import ResearchPlan
+from app.analytics.correlation import find_rule
 from app.analytics.results import Computation, Interval, Refusal, RefusalCode, SeriesInput
+from app.analytics.tools import Toolkit
 from app.connectors import registry
 from app.connectors.http import SourceSchemaError, SourceUnavailable
 from app.data.consistency import compare, tolerance
@@ -329,7 +331,7 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
 # -- analytics -------------------------------------------------------------------------------------
 
 ToolName = Literal[
-    "value_at", "change_between", "yoy_change", "cagr", "trend", "compare_periods", "cumulative"
+    "value_at", "change_between", "yoy_change", "cagr", "trend", "compare_periods", "cumulative", "correlate"
 ]
 
 
@@ -343,6 +345,8 @@ class _Compute(_Step):
     a_end: str | None = None
     b_start: str | None = Field(default=None, description="For compare_periods: later window")
     b_end: str | None = None
+    other_series_key: str | None = Field(default=None, description="For correlate: the second series")
+    lag: str | None = Field(default=None, description="For correlate: quarters the second series trails")
 
 
 class _AssertionIn(BaseModel):
@@ -372,6 +376,8 @@ _SINGLE_PERIOD_PREDICATES = {"level.at", "flow.at"}
 
 def infer_kind(assertions: list[_AssertionIn]) -> str:
     """Models sometimes omit `kind`; it follows from what the assertions state."""
+    if any(a.predicate.startswith("assoc.") for a in assertions):
+        return "association"
     return "measured" if all(a.predicate in _SINGLE_PERIOD_PREDICATES for a in assertions) else "comparison"
 
 
@@ -383,6 +389,7 @@ _ARGS = {
     "trend": ("start", "end"),
     "compare_periods": ("a_start", "a_end", "b_start", "b_end"),
     "cumulative": ("start", "end"),
+    "correlate": ("start", "end"),
 }
 
 
@@ -406,6 +413,50 @@ def _describe(c: Computation) -> dict[str, Any]:
     }
 
 
+def correlation_candidates(selected: dict[str, Selection]) -> list[tuple[str, str]]:
+    """Ordered pairs of selected series that measure different things about the same sector:
+    the pairs a researcher could ask to relate. Each unordered pair appears once."""
+    keys = sorted(selected)
+    return [
+        (x, y)
+        for i, x in enumerate(keys)
+        for y in keys[i + 1 :]
+        if selected[x].source.identity.sector == selected[y].source.identity.sector
+        and selected[x].source.identity.metric != selected[y].source.identity.metric
+    ]
+
+
+def suggested_correlations(
+    toolkit: Toolkit, selected: dict[str, Selection], plan: ResearchPlan
+) -> tuple[list[dict[str, str]], list[Refusal]]:
+    """Eligible correlations at each allowed lag, and the refusal for every candidate pair that no
+    pairing rule allows (e.g. REFERENCE_MISMATCH): a refusal is a finding about the evidence too."""
+    suggestions, refusals = [], []
+    for a, b in correlation_candidates(selected):
+        x, y = selected[a], selected[b]
+        window = plan_window(plan, x.source.identity.frequency)
+        probe = toolkit.correlate(x.source, x.series, y.source, y.series, window[0], window[-1], 0)
+        if isinstance(probe, Refusal):
+            refusals.append(probe)
+            continue
+        leader, follower = probe.inputs  # correlate orders them as its pairing rule does
+        rule = find_rule(leader.identity, follower.identity)
+        assert rule is not None
+        for lag in sorted(rule.lags):
+            suggestions.append(
+                {
+                    "tool": "correlate",
+                    "series_key": leader.series_key,
+                    "other_series_key": follower.series_key,
+                    "start": window[0],
+                    "end": window[-1],
+                    "lag": str(lag),
+                    "pairs": rule.lag_meaning[lag],
+                }
+            )
+    return suggestions, refusals
+
+
 def suggested_computations(measure: MeasureType, window: list[str]) -> list[dict[str, str]]:
     """Statistics that are eligible for this kind of series over the plan window, with exact arguments."""
     start, end = window[0], window[-1]
@@ -426,7 +477,8 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
     computed_this_round = 0
 
     async def list_evidence(rationale: str = "") -> list[dict[str, Any]]:
-        out = []
+        out: list[dict[str, Any]] = []
+        correlations, refusals = suggested_correlations(ctx.toolkit, ctx.evidence.selected, plan)
         for key, sel in ctx.evidence.selected.items():
             window = plan_window(plan, sel.source.identity.frequency)
             out.append(
@@ -435,11 +487,22 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                     "subject": sel.source.identity.subject(),
                     **sel.source.identity.model_dump(mode="json"),
                     "plan_window": [window[0], window[-1]],
-                    "suggested_computations": suggested_computations(
-                        sel.source.identity.measure_type, window
-                    ),
+                    # A pair's correlations are listed first under its leading series.
+                    "suggested_computations": [c for c in correlations if c["series_key"] == key]
+                    + suggested_computations(sel.source.identity.measure_type, window),
                 }
             )
+        for refusal in refusals:
+            if refusal not in ctx.evidence.refusals:
+                ctx.evidence.refusals.append(refusal)
+                await ctx.writer.emit(
+                    "analytics",
+                    "refusal",
+                    f"correlate refused: {refusal.code}",
+                    {"series_key": refusal.series_key, "code": refusal.code, "detail": refusal.detail},
+                )
+        if refusals:
+            out.append({"correlations_not_allowed": [f"{r.code}: {r.detail}" for r in refusals]})
         return out or [{"note": "no series selected"}]
 
     async def compute(tool: ToolName, series_key: str, rationale: str = "", **params: str | None) -> Any:
@@ -455,13 +518,33 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         needed = _ARGS[tool]
         if missing := [a for a in needed if not params.get(a)]:
             raise RuntimeError(f"{tool} needs {', '.join(missing)}")
-        computed_this_round += 1
-        result: Computation | Refusal = getattr(ctx.toolkit, tool)(
-            selection.source, selection.series, *(params[a] for a in needed)
-        )
+        args = [params[a] for a in needed]
+        if tool == "correlate":
+            other = ctx.evidence.selected.get(params.get("other_series_key") or "")
+            if other is None:
+                raise RuntimeError("correlate needs other_series_key: a second selected series")
+            computed_this_round += 1
+            result: Computation | Refusal = ctx.toolkit.correlate(
+                selection.source,
+                selection.series,
+                other.source,
+                other.series,
+                str(params["start"]),
+                str(params["end"]),
+                params.get("lag") or "0",
+            )
+        else:
+            computed_this_round += 1
+            result = getattr(ctx.toolkit, tool)(selection.source, selection.series, *args)
         if isinstance(result, Refusal) and result.code is RefusalCode.INVALID_WINDOW:
             computed_this_round -= 1  # an argument mistake, not an analysis: report it to the agent only
             raise RuntimeError(f"invalid arguments: {result.detail}")
+        if isinstance(result, Refusal) and result in ctx.evidence.refusals:
+            computed_this_round -= 1  # nothing new learned: do not spend the budget on it
+            return f"REFUSED {result.code} (already recorded): {result.detail}"
+        if isinstance(result, Computation) and result.id in ctx.evidence.computations:
+            computed_this_round -= 1  # same evidence and method: the earlier result is reused
+            return {**_describe(result), "note": "already computed; draft from this computation_id"}
         if isinstance(result, Refusal):
             ctx.evidence.refusals.append(result)
             await ctx.writer.emit(
@@ -485,7 +568,8 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         assertions: list[Any], kind: str | None = None, lead_in: str = "", rationale: str = ""
     ) -> str:
         parsed = [_AssertionIn.model_validate(a) for a in assertions]
-        kind = kind or infer_kind(parsed)
+        # An association is defined by its predicate, not by what the model calls it.
+        kind = "association" if infer_kind(parsed) == "association" else kind or infer_kind(parsed)
         # Readability rules: one idea per finding. Rejected before verification, so they are not counted.
         if not parsed:
             return "EMPTY: a finding needs at least one assertion"

@@ -68,6 +68,9 @@ def _check_assertion(
     field = computation.result[a.field]
     value = field.value
     sign_ok = predicate.sign is None or (value > 0 if predicate.sign == "positive" else value < 0)
+    strength_ok = (predicate.min_abs is None or abs(value) >= predicate.min_abs) and (
+        predicate.max_abs is None or abs(value) < predicate.max_abs
+    )
     needed = _KIND_NEEDS.get(claim.kind)
     return [
         CheckResult(name="resolution", passed=True),
@@ -96,6 +99,13 @@ def _check_assertion(
             name="sign_rule",
             passed=sign_ok,
             detail=f"{label} {a.predicate} needs a {predicate.sign} value, got {value:g}",
+        ),
+        CheckResult(
+            name="strength_rule",
+            passed=strength_ok,
+            detail=f"{label} {a.predicate} needs |value| "
+            + (f">= {predicate.min_abs}" if predicate.min_abs is not None else f"< {predicate.max_abs}")
+            + f", got {value:.2f}",
         ),
         CheckResult(
             name="kind_allowed",

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.agents.evidence import ConsistencyCheck, EvidenceStore
 from app.agents.plan import ResearchPlan
 from app.agents.tools import plan_window
+from app.analytics.results import Refusal
 from app.grounding.checks import check_free_text
 from app.grounding.citations import CitationIndex, EvidenceRef, claim_refs
 from app.grounding.render import DISPLAY_ROUNDING_VERSION, render_claim
@@ -188,11 +189,23 @@ def _charts(plan: ResearchPlan, evidence: EvidenceStore, citations: CitationInde
     ]
 
 
+def _refusal_text(refusal: Refusal, evidence: EvidenceStore) -> str:
+    def name(series_key: str) -> str:
+        found = evidence.find_series(series_key)
+        identity = found[1].identity if found else None
+        return f"{identity.subject()} ({identity.frequency})" if identity else series_key
+
+    if refusal.other_series_key:
+        other = name(refusal.other_series_key)
+        return (
+            f"{name(refusal.series_key)} and {other[:1].lower() + other[1:]} were not correlated: "
+            f"{refusal.code} ({refusal.detail})"
+        )
+    return f"{refusal.tool} on {name(refusal.series_key)} was not computed: {refusal.code} ({refusal.detail})"
+
+
 def _derived_limitations(evidence: EvidenceStore) -> list[dict[str, str]]:
-    out = [
-        {"source": "analysis", "text": f"{r.tool} on {r.series_key} was not computed: {r.code} ({r.detail})"}
-        for r in evidence.refusals
-    ]
+    out = [{"source": "analysis", "text": _refusal_text(r, evidence)} for r in evidence.refusals]
     rejected = len(evidence.claims) - len(evidence.verified_claims())
     if rejected:
         out.append(

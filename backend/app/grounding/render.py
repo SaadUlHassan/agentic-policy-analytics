@@ -14,6 +14,8 @@ _PER_YEAR = "_per_year"
 
 def format_field(field: ResultField, *, magnitude: bool = False) -> str:
     """Render a value in its source unit. `magnitude` drops the sign (predicates say rose/fell)."""
+    if field.unit == "correlation":  # the sign is the finding: never dropped
+        return f"{field.value:.2f}"
     value = abs(field.value) if magnitude else field.value
     unit, per_year = field.unit, ""
     if unit.endswith(_PER_YEAR):
@@ -33,10 +35,10 @@ def format_field(field: ResultField, *, magnitude: bool = False) -> str:
 def render_assertion(assertion: Assertion, computation: Computation) -> str:
     predicate = PREDICATES[assertion.predicate]
     field = computation.result[assertion.field]
-    subject = computation.inputs[0].identity.subject()
+    subjects = [_mid_sentence(i.identity.subject()) for i in computation.inputs]
     values = {
-        # Lower-case so the assertion reads naturally mid-sentence; render_claim capitalises the start.
-        "subject": subject[:1].lower() + subject[1:],
+        "subject": subjects[0],
+        "subject_b": subjects[1] if len(subjects) > 1 else "",
         "value": format_field(field, magnitude=predicate.sign is not None),
         "t0": field.interval.start,
         "t1": field.interval.end,
@@ -49,8 +51,28 @@ def render_assertion(assertion: Assertion, computation: Computation) -> str:
                 ("b1", "b", "end"),
             )
         },
+        **_correlation_slots(assertion, computation),
     }
     return predicate.template.format(**values)
+
+
+def _mid_sentence(subject: str) -> str:
+    """Lower-case so a subject reads naturally mid-sentence; render_claim capitalises the start."""
+    return subject[:1].lower() + subject[1:]
+
+
+_MEASURES = {"pearson_r": "Pearson r", "spearman_rho": "Spearman rank correlation"}
+_LAG_PHRASES = {"0": " in the same quarter", "1": " in the following quarter"}
+
+
+def _correlation_slots(assertion: Assertion, computation: Computation) -> dict[str, str]:
+    if computation.tool != "correlate":
+        return {}
+    return {
+        "measure": _MEASURES.get(assertion.field, assertion.field),
+        "n": f"{computation.result['pairs'].value:.0f}",
+        "lag_phrase": _LAG_PHRASES.get(str(computation.params.get("lag")), ""),
+    }
 
 
 def render_claim(claim: Claim, computations: dict[str, Computation]) -> str:
