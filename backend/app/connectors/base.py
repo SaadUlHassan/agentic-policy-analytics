@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.connectors.catalog import DatasetEntry, PlatformInfo
 from app.connectors.http import RawPayload
 from app.data.models import NormalizedDataset, Provenance, QualityIssue, SeriesData, Severity
@@ -20,8 +22,19 @@ def assemble(
     title: str,
     source_updated_at: str | None,
     footnotes: str | None,
+    source_metadata: dict[str, Any] | None = None,
 ) -> NormalizedDataset:
     issues = [*issues, *flag_ambiguous_sectors(series)]
+    if unidentified := [s for s in series if s.identity is None]:
+        labels = ", ".join(dict.fromkeys(s.label for s in unidentified))
+        issues.append(
+            QualityIssue(
+                code="UNIDENTIFIED_SERIES",
+                severity=Severity.INFO,
+                count=len(unidentified),
+                message=f"rows matching no catalogued sector are kept but not used: {labels[:300]}",
+            )
+        )
     if any(p.from_snapshot for p in payloads):
         fallbacks = {p.fallback_reason for p in payloads if p.fallback_reason}
         retrieved = min(p.retrieved_at for p in payloads if p.from_snapshot).date().isoformat()
@@ -53,6 +66,7 @@ def assemble(
         provenance=provenance,
         series=series,
         quality=issues,
+        source_metadata=source_metadata or {},
         taxonomy_version=taxonomy.version,
     )
     return dataset.with_artifact_id()

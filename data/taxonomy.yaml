@@ -4,22 +4,25 @@
 # and the source labels observed for it. Labels are matched after normalisation (lower case,
 # collapsed whitespace, "&" -> "and"); only the aliases below count as the same sector.
 # A parent and its child are always different sectors and are never merged.
+# `source_codes` lists the SSIC code ranges sources state for a sector (MOM workbooks); a row whose
+# stated code is not listed for its label is an identity conflict and is not used. The misspelt
+# "telecomunications" alias is how MOM's annual workbook writes that label.
 version: 1
 
 schemes:
   SSIC2020:
     total:            {label: "All industries", aliases: ["total", "total changes in employment"]}
     goods_producing:  {label: "Goods-producing industries", parent: total, aliases: ["goods producing industries"]}
-    services:         {label: "Services", parent: total, aliases: ["services", "services producing industries"]}
-    manufacturing:    {label: "Manufacturing", code: C, parent: goods_producing, aliases: ["manufacturing"]}
-    construction:     {label: "Construction", code: F, parent: goods_producing, aliases: ["construction"]}
-    wholesale_retail: {label: "Wholesale & Retail Trade", code: G, parent: services, aliases: ["wholesale and retail trade"]}
-    transport_storage: {label: "Transportation & Storage", code: H, parent: services, aliases: ["transportation and storage"]}
-    accommodation_food: {label: "Accommodation & Food Services", code: I, parent: services, aliases: ["accommodation and food services"]}
-    info_comms:       {label: "Information & Communications", code: J, parent: services, aliases: ["information and communications"]}
-    it_info_services: {label: "IT & Other Information Services", code: J62-63, parent: info_comms, aliases: ["it and other information services"]}
-    telecom_broadcast_publishing: {label: "Telecommunications, Broadcasting & Publishing", parent: info_comms, aliases: ["telecommunications, broadcasting and publishing"]}
-    finance_insurance: {label: "Financial & Insurance Services", code: K, parent: services, aliases: ["financial and insurance services"]}
-    real_estate:      {label: "Real Estate Services", code: L, parent: services, aliases: ["real estate services"]}
-    professional:     {label: "Professional Services", code: M, parent: services, aliases: ["professional services"]}
-    admin_support:    {label: "Administrative & Support Services", code: N, parent: services, aliases: ["administrative and support services"]}
+    services:         {label: "Services", parent: total, aliases: ["services", "services producing industries"], source_codes: ["G-U", "G46-U99"]}
+    manufacturing:    {label: "Manufacturing", code: C, parent: goods_producing, aliases: ["manufacturing"], source_codes: ["C10-32"]}
+    construction:     {label: "Construction", code: F, parent: goods_producing, aliases: ["construction"], source_codes: ["F41-43"]}
+    wholesale_retail: {label: "Wholesale & Retail Trade", code: G, parent: services, aliases: ["wholesale and retail trade"], source_codes: ["G46-47"]}
+    transport_storage: {label: "Transportation & Storage", code: H, parent: services, aliases: ["transportation and storage"], source_codes: ["H49-53"]}
+    accommodation_food: {label: "Accommodation & Food Services", code: I, parent: services, aliases: ["accommodation and food services"], source_codes: ["I55-56"]}
+    info_comms:       {label: "Information & Communications", code: J, parent: services, aliases: ["information and communications"], source_codes: ["J58-63"]}
+    it_info_services: {label: "IT & Other Information Services", code: J62-63, parent: info_comms, aliases: ["it and other information services"], source_codes: ["J62-63"]}
+    telecom_broadcast_publishing: {label: "Telecommunications, Broadcasting & Publishing", parent: info_comms, aliases: ["telecommunications, broadcasting and publishing", "telecomunications, broadcasting and publishing"], source_codes: ["J58-61"]}
+    finance_insurance: {label: "Financial & Insurance Services", code: K, parent: services, aliases: ["financial and insurance services"], source_codes: ["K64-66"]}
+    real_estate:      {label: "Real Estate Services", code: L, parent: services, aliases: ["real estate services"], source_codes: ["L68"]}
+    professional:     {label: "Professional Services", code: M, parent: services, aliases: ["professional services"], source_codes: ["M69-75"]}
+    admin_support:    {label: "Administrative & Support Services", code: N, parent: services, aliases: ["administrative and support services"], source_codes: ["N77-82"]}

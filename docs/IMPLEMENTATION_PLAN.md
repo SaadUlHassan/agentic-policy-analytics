@@ -955,3 +955,40 @@ All of the following was verified live: the example query on Bedrock primary, on
 - Nova sometimes offers far more than four clarification options.
 - The planner can pick a stale "last five years" window, e.g. 2018–2022.
 - Two drafted claims can restate the same verified assertion.
+
+## M2 outcomes: data integration and quality
+
+**Delivered:** the MOM workbook connector (CSV as fallback), the Data.gov.sg CSV download path, rate limits shared across workers with the API key sent when configured, the raw-payload store, mirror checks at published precision, and the data-quality mutation suite.
+
+**Decisions taken while building:**
+- **MOM files are discovered at every fetch.** The index page is scanned for the dataset's stable filename prefix and the newest release date wins.
+  - When the page is down or no longer links the dataset, the last-known release URL in the catalogue is used, and a `DISCOVERY_FALLBACK` warning says so.
+  - A page served from its snapshot after a live failure is also a discovery fallback, even when the workbook it links is then fetched live.
+  - The warning is raised only when the fallback file is actually used.
+- **The workbook is the primary MOM format, the CSV the fallback.** The workbook publishes sector totals with SSIC codes, its legend and its unit; the CSV lists only the lowest-level industries (no Information & Communications total) and carries no legend.
+  - The quarterly SSIC2020 sheet is six side-by-side blocks of three years. Rows are merged across blocks.
+  - Legend (`'-' : Nil or negligible`) and unit (`In Thousands`) are read from the sheet on every fetch and checked against the reviewed manifest: `LEGEND_CHANGED` and `UNIT_MISMATCH` respectively.
+  - The scale must be confirmed by the sheet. An unstated or unrecognised unit (e.g. "In Millions") is a blocking `UNIT_UNVERIFIED` error, never a silent assumption.
+  - The newest quarter header reads `1Q^`, a footnote mark the sheet does not explain. It is stripped and disclosed (`PERIOD_FOOTNOTE`).
+- **A MOM row is identified by its stated SSIC code plus its label.** The taxonomy records the code ranges sources state per sector (e.g. `J58-63`). A row whose code contradicts its label, such as a child relabelled with its parent's name, is an `IDENTITY_CONFLICT` error and is not used.
+- **The Data.gov.sg CSV download is preferred where catalogued.** It is one rate-limited request instead of one per 1,000 datastore records. The datastore is the fallback.
+  - Both paths carry the same records as text and yield the same artifact ID (tested).
+  - The pre-signed S3 URL is used once and never stored. The download's identity is its `poll-download` URL, which is also the snapshot key. The initiate and poll responses are never recorded.
+- **Rate limits are shared through Redis.** Each call claims the next slot (`SET NX PX`), spaced 10% inside the published limit. Without Redis, each process falls back to twice the interval, with the spacing state shared by every analysis in that process.
+  - Published limits per 10 s: datastore 4 / 8 / 20 and downloads 2 / 4 / 10 (none / dev / prod key).
+  - `DATAGOV_API_KEY` is sent as `x-api-key`, only to `data.gov.sg` hosts. `DATAGOV_KEY_TIER` selects the limits.
+- **Schema drift is checked with pandera** on the columns each parser relies on. A missing column is a `SourceSchemaError`, never a `KeyError`. The extraction tool reports it to the agent and shows it in the timeline.
+- **Artifact identity covers what the source says about its values.** Besides the observations, the hash includes `source_metadata` (stated units, legend, SingStat units of measure) and every blocking issue. A workbook with the same numbers but a different stated unit is a different artifact, so a clean copy stored earlier can never stand in for it on resume.
+- **Shared values, per-analysis fetch.** An artifact's values are shared, but provenance and fetch-time disclosures (discovery or format fallbacks, snapshot use) belong to each analysis's fetch. They are kept on `analysis_artifacts.fetch_record` and restored over the shared artifact on resume, so a fallback disclosed in one analysis never disappears because another analysis stored the same values first.
+- **Mirror checks run in both directions and only on usable evidence.** Selecting MOM's release checks SingStat's republication, and vice versa. If either side has a blocking error, the result is "not comparable", never "consistent".
+- **Mirrors agree within half the coarser published increment.** MOM publishes thousands to 0.1 and SingStat whole persons, so they are compared at ±50 persons. An exact comparison would also have failed on float noise (-1.1 × 1000 ≠ -1100).
+- **A republished copy of an already-selected statistic is refused.** Selecting both would report one figure twice. This was observed live before the guard; it is now only a cross-check.
+- **Raw payload bytes are stored by SHA-256** alongside each dataset artifact, which already lists those hashes.
+
+**Verified live:**
+- MOM discovery found the 21 Sep 2026 quarterly workbook.
+- The Data.gov.sg CSV download completed in 7 s without a key.
+- A quarterly ICT employment question was answered from SingStat M183891, cross-checked against MOM's workbook ("consistent within published rounding (±50)"), and both raw payloads were stored.
+
+**Not yet done:** the data-quality panel in the UI (area D).
+

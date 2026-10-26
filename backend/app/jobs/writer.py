@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Iterable
 from typing import Any
 
 import redis.asyncio as redis
@@ -12,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.analytics.results import Computation
+from app.connectors.http import RawPayload
 from app.data.models import NormalizedDataset
 from app.db.models import (
     TERMINAL_STATUSES,
@@ -21,6 +23,7 @@ from app.db.models import (
     ComputationRow,
     DatasetArtifact,
     LLMCall,
+    RawPayloadRow,
     ReportRow,
 )
 from app.jobs.lifecycle import LeaseLost
@@ -88,9 +91,24 @@ class FencedWriter:
         await self._publish(seq)
         return seq
 
-    async def save_artifact(self, dataset: NormalizedDataset) -> None:
+    async def save_artifact(self, dataset: NormalizedDataset, payloads: Iterable[RawPayload] = ()) -> None:
+        """Store the dataset, link it to this analysis and keep the raw bytes it was built from."""
         async with self.sessions() as session:
             await self._fence(session)
+            for p in payloads:
+                await session.execute(
+                    insert(RawPayloadRow)
+                    .values(
+                        sha256=p.sha256,
+                        url=p.url,
+                        content_type=p.content_type,
+                        size_bytes=len(p.body),
+                        body=p.body,
+                        retrieved_at=p.retrieved_at,
+                        from_snapshot=p.from_snapshot,
+                    )
+                    .on_conflict_do_nothing()
+                )
             await session.execute(
                 insert(DatasetArtifact)
                 .values(
@@ -101,10 +119,18 @@ class FencedWriter:
                 )
                 .on_conflict_do_nothing()
             )
+            # The shared row above keeps whichever fetch stored it first; this analysis's own
+            # provenance and disclosures are kept here and restored with it on resume.
+            fetch = {
+                "provenance": dataset.provenance.model_dump(mode="json"),
+                "quality": [i.model_dump(mode="json") for i in dataset.quality],
+            }
             await session.execute(
                 insert(AnalysisArtifact)
-                .values(analysis_id=self.analysis_id, artifact_id=dataset.artifact_id)
-                .on_conflict_do_nothing()
+                .values(analysis_id=self.analysis_id, artifact_id=dataset.artifact_id, fetch_record=fetch)
+                .on_conflict_do_update(
+                    index_elements=["analysis_id", "artifact_id"], set_={"fetch_record": fetch}
+                )
             )
             await session.commit()
 

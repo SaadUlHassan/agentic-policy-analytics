@@ -17,8 +17,9 @@ from app.agents.evidence import ConsistencyCheck, Rejection, Selection
 from app.agents.plan import ResearchPlan
 from app.analytics.results import Computation, Interval, Refusal, RefusalCode, SeriesInput
 from app.connectors import registry
-from app.connectors.http import SourceUnavailable
-from app.data.identity import MeasureType, same_measure_incompatibility
+from app.connectors.http import SourceSchemaError, SourceUnavailable
+from app.data.consistency import compare, tolerance
+from app.data.identity import MeasureType, SeriesIdentity, same_measure_incompatibility
 from app.data.models import NormalizedDataset, SeriesData
 from app.data.periods import Frequency
 from app.grounding.checks import verify_claim
@@ -98,8 +99,21 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
             dataset = await registry.fetch(dataset_id, ctx.catalog, ctx.taxonomy, ctx.fetcher)
         except SourceUnavailable as exc:
             raise RuntimeError(f"source unavailable: {exc.reason}") from exc
+        except SourceSchemaError as exc:
+            # Schema drift: nothing from this payload is used, and the drift is shown, not hidden.
+            await ctx.writer.emit(
+                "extraction",
+                "quality_report",
+                f"Rejected {dataset_id}: source format changed",
+                {
+                    "dataset_id": dataset_id,
+                    "issues": [{"code": "SCHEMA_DRIFT", "severity": "error", "message": exc.problem}],
+                },
+            )
+            raise RuntimeError(f"source format changed: {exc.problem}") from exc
         ctx.evidence.datasets[dataset.artifact_id] = dataset
-        await ctx.writer.save_artifact(dataset)
+        used = [ctx.fetcher.payloads[h] for h in dataset.provenance.raw_sha256 if h in ctx.fetcher.payloads]
+        await ctx.writer.save_artifact(dataset, used)
         await ctx.writer.emit(
             "extraction",
             "quality_report",
@@ -132,15 +146,19 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
             raise RuntimeError("both series must be identified")
         if reason := same_measure_incompatibility(a.identity, b.identity):
             return {"verdict": "not comparable", "reason": reason.value}
-        values_a, values_b = a.value_map(), b.value_map()
-        compared, mismatches = [], []
-        for period in plan_window(plan, a.identity.frequency):
-            va, vb = values_a.get(period), values_b.get(period)
-            if va is None or vb is None or va.value is None or vb.value is None:
-                continue
-            compared.append(period)
-            if va.value * a.identity.scale != vb.value * b.identity.scale:
-                mismatches.append({"period": period, series_key: va.value, other_series_key: vb.value})
+        if broken := [
+            f"{d.dataset_id}: {i.code}" for d, s in ((ds_a, a), (ds_b, b)) for i in d.blocking_issues(s)
+        ]:
+            # Agreement with unusable evidence would be false reassurance.
+            await ctx.writer.emit(
+                "extraction",
+                "consistency_check",
+                "not comparable",
+                {"series_a": series_key, "series_b": other_series_key, "blocking_issues": broken},
+            )
+            return {"verdict": "not comparable", "reason": "blocking quality errors: " + "; ".join(broken)}
+        allowed = tolerance(ctx.catalog.get(ds_a.dataset_id), ctx.catalog.get(ds_b.dataset_id))
+        compared, mismatches = compare(a, b, plan_window(plan, a.identity.frequency), allowed)
         check = ConsistencyCheck(
             series_a=series_key,
             artifact_a=ds_a.artifact_id,
@@ -148,6 +166,7 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
             artifact_b=ds_b.artifact_id,
             periods=compared,
             mismatches=mismatches,
+            tolerance=allowed,
         )
         ctx.evidence.consistency.append(check)
         await ctx.writer.emit(
@@ -160,6 +179,7 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                 "series_b": other_series_key,
                 "platform_b": ds_b.provenance.platform,
                 "periods_compared": len(compared),
+                "tolerance": allowed,
                 "mismatches": mismatches,
             },
         )
@@ -168,9 +188,8 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
     async def _check_mirrors(dataset_id: str, series: SeriesData) -> list[str]:
         """Quality control, not a choice: a selected series is always compared with the same statistic
         republished on another catalogued platform."""
-        entry = ctx.catalog.get(dataset_id)
         notes = []
-        for mirror_id in [m for m in (entry.mirrors if entry else []) if ctx.catalog.get(m)]:
+        for mirror_id in sorted(m for m in ctx.catalog.mirror_group(dataset_id) if ctx.catalog.get(m)):
             try:
                 mirror = await _load(mirror_id)
             except RuntimeError as exc:
@@ -189,9 +208,8 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                 notes.append(f"mirror {mirror_id} has no matching series")
                 continue
             result = await _compare(series.key, twin.key)
-            notes.append(
-                f"cross-checked against {mirror_id} ({mirror.provenance.platform}): {result['verdict']}"
-            )
+            verdict = result["verdict"] + (f" ({result['reason']})" if "reason" in result else "")
+            notes.append(f"cross-checked against {mirror_id} ({mirror.provenance.platform}): {verdict}")
         return notes
 
     async def search_catalog(query: str, rationale: str = "") -> list[dict[str, Any]]:
@@ -231,6 +249,19 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
             )
         return out or [{"note": f"no identified series for sector {sector!r} in {dataset_id}"}]
 
+    def _republished(series_key: str, dataset_id: str, identity: SeriesIdentity) -> list[str]:
+        """A republication of an already-selected statistic adds no evidence, only a cross-check:
+        selecting both would report the same figure twice."""
+        mirrors = ctx.catalog.mirror_group(dataset_id)
+        return [
+            f"same statistic as the selected {key} ({chosen.source.dataset_id}); "
+            "republished copies are used only as a cross-check"
+            for key, chosen in ctx.evidence.selected.items()
+            if key != series_key
+            and chosen.source.dataset_id in mirrors
+            and same_measure_incompatibility(identity, chosen.source.identity) is None
+        ]
+
     async def select_series(series_key: str, reason: str, rationale: str = "") -> str:
         found = ctx.evidence.find_series(series_key)
         if found is None:
@@ -248,6 +279,7 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                 problems.append(f"metric {identity.metric} is not in the plan {plan.metrics}")
             if missing := _missing_in_window(series, plan_window(plan, identity.frequency)):
                 problems.append(f"no values for {', '.join(missing)}")
+            problems += _republished(series_key, dataset.dataset_id, identity)
         if problems or identity is None:
             await ctx.writer.emit("extraction", "selection_refused", series_key, {"problems": problems})
             return "REFUSED by policy: " + "; ".join(problems)

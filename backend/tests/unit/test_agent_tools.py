@@ -36,7 +36,7 @@ class MemoryWriter:
         self.events.append((type, title, detail or {}))
         return len(self.events)
 
-    async def save_artifact(self, dataset):
+    async def save_artifact(self, dataset, payloads=()):
         pass
 
     async def save_computation(self, computation):
@@ -226,3 +226,64 @@ async def test_series_with_a_blocking_quality_error_cannot_be_selected(tmp_path)
     assert inspected["blocking_quality_errors"][0].startswith("UNIT_MISMATCH")
     assert reply.startswith("REFUSED by policy") and "UNIT_MISMATCH" in reply
     assert not ctx.evidence.selected
+
+
+async def test_a_republished_copy_of_a_selected_statistic_is_refused():
+    ctx = _ctx()
+    plan = PLAN.model_copy(update={"metrics": ["employment_change"]})
+    tools = _tools(extraction_tools(ctx, plan))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M183891", "rationale": "r"})
+    first = await tools["select_series"].ainvoke(
+        {"series_key": "M183891:1.2.4@SSIC2020", "reason": "fits", "rationale": "r"}
+    )
+    assert (
+        "cross-checked against mrsd_3_qtly_emp_chg_by_ind (mom): consistent within published rounding"
+        in first
+    )
+
+    mom_ict = ctx.evidence.dataset("mrsd_3_qtly_emp_chg_by_ind").find("info_comms")[0].key
+    second = await tools["select_series"].ainvoke(
+        {"series_key": mom_ict, "reason": "also fits", "rationale": "r"}
+    )
+
+    assert second.startswith("REFUSED by policy") and "used only as a cross-check" in second
+    assert list(ctx.evidence.selected) == ["M183891:1.2.4@SSIC2020"]
+
+
+def _employment_change_tools(ctx):
+    return _tools(extraction_tools(ctx, PLAN.model_copy(update={"metrics": ["employment_change"]})))
+
+
+async def test_selecting_the_mom_release_first_still_cross_checks_singstat():
+    ctx = _ctx()
+    tools = _employment_change_tools(ctx)
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "mrsd_3_qtly_emp_chg_by_ind", "rationale": "r"})
+    mom_ict = ctx.evidence.dataset("mrsd_3_qtly_emp_chg_by_ind").find("info_comms")[0].key
+
+    reply = await tools["select_series"].ainvoke({"series_key": mom_ict, "reason": "fits", "rationale": "r"})
+
+    assert "cross-checked against M183891 (singstat): consistent within published rounding" in reply
+    (check,) = ctx.evidence.consistency
+    assert check.mismatches == [] and len(check.periods) == 20
+
+
+async def test_a_mirror_with_blocking_errors_is_not_reported_consistent():
+    from tests.unit.data.test_quality_mutations import MOM_Q_XLSX, MutatedSnapshots, _cells, _edit_workbook
+
+    def hundreds(sheet) -> None:
+        for cell in _cells(sheet, lambda v: v == "In Thousands"):
+            cell.value = "In Hundreds"
+
+    ctx = _ctx()
+    ctx.fetcher = Fetcher(mode="snapshot", snapshots=MutatedSnapshots({MOM_Q_XLSX: _edit_workbook(hundreds)}))
+    tools = _employment_change_tools(ctx)
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M183891", "rationale": "r"})
+
+    reply = await tools["select_series"].ainvoke(
+        {"series_key": "M183891:1.2.4@SSIC2020", "reason": "fits", "rationale": "r"}
+    )
+
+    assert "not comparable (blocking quality errors: mrsd_3_qtly_emp_chg_by_ind: UNIT_MISMATCH)" in reply
+    assert "consistent" not in reply and ctx.evidence.consistency == []
+    events = [d for t, _, d in ctx.writer.events if t == "consistency_check"]
+    assert events and events[-1]["blocking_issues"]

@@ -33,12 +33,19 @@ class ConsistencyCheck:
     artifact_b: str
     periods: list[str]
     mismatches: list[dict]
+    tolerance: float = 0.0  # in base units: half the coarser published increment
 
     @property
     def verdict(self) -> str:
         if not self.periods:
             return "no overlapping periods"
-        return "consistent" if not self.mismatches else f"{len(self.mismatches)} period(s) disagree"
+        if self.mismatches:
+            return f"{len(self.mismatches)} period(s) disagree"
+        return (
+            "consistent"
+            if not self.tolerance
+            else f"consistent within published rounding (±{self.tolerance:g})"
+        )
 
 
 @dataclass

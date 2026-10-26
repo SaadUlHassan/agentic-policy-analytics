@@ -70,6 +70,7 @@ async def fetch_table(
         title=first.get("title") or entry.title,
         source_updated_at=first.get("dataLastUpdated"),
         footnotes=first.get("footnote"),
+        source_metadata={"units": {series_no: row.uom for series_no, row in rows.items()}},
     )
 
 

@@ -45,6 +45,7 @@ def build_series(
     source_ref: str,
     label: str,
     points: Iterable[tuple[str, str]],
+    stated_code: str | None = None,
 ) -> tuple[list[SeriesData], list[QualityIssue]]:
     """Build one SeriesData per classification regime the points span.
 
@@ -127,6 +128,16 @@ def build_series(
         identity, reason = None, None
         if sector is None:
             reason = f"label {label!r} has no {scheme} sector in the taxonomy"
+        elif sector.contradicts(stated_code):
+            reason = f"label {label!r} names {sector.key}, but the row is coded {stated_code!r}"
+            issues.append(
+                QualityIssue(
+                    code="IDENTITY_CONFLICT",
+                    severity=Severity.ERROR,
+                    series_key=key,
+                    message=f"{reason} ({sector.key} is {', '.join(sector.source_codes)}); not used",
+                )
+            )
         else:
             identity = _identity(entry, scheme, sector.key, sector.label, sector.code)
         series.append(

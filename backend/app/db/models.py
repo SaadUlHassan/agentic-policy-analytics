@@ -6,7 +6,17 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -111,11 +121,33 @@ class DatasetArtifact(Base):
     created_at: Mapped[datetime] = _now()
 
 
+class RawPayloadRow(Base):
+    """Source bytes exactly as received, by SHA-256 (plan §4.6): the provenance behind every
+    dataset artifact (`Provenance.raw_sha256`). Responses that can carry credentials are never
+    recorded (see Fetcher.call)."""
+
+    __tablename__ = "raw_payloads"
+
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128))
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    body: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    from_snapshot: Mapped[bool] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = _now()
+
+
 class AnalysisArtifact(Base):
+    """An artifact as one analysis fetched it. The artifact (the values) is shared; how this fetch
+    got it (retrieval time, snapshot or live, fallbacks and other disclosures) is not."""
+
     __tablename__ = "analysis_artifacts"
 
     analysis_id: Mapped[str] = mapped_column(ForeignKey("analyses.id", ondelete="CASCADE"), primary_key=True)
     artifact_id: Mapped[str] = mapped_column(ForeignKey("dataset_artifacts.artifact_id"), primary_key=True)
+    # {"provenance": Provenance, "quality": [QualityIssue]} of this analysis's fetch.
+    fetch_record: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class ComputationRow(Base):

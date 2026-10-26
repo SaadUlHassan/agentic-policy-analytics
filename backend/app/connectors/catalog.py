@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.config import get_settings
 from app.data.identity import MeasureType
@@ -71,6 +71,7 @@ class DatasetEntry(BaseModel):
     description: str = ""
     keywords: list[str] = []
     catalogued: bool = True
+    formats: list[str] = Field(default=[], alias="format")
     metric: str | None = None
     measure_type: MeasureType | None = None
     reference_convention: str | None = None
@@ -84,6 +85,17 @@ class DatasetEntry(BaseModel):
     footnotes: str | None = None
     mirrors: list[str] = []
     mirror_of: str | None = None
+    # Smallest increment the source publishes, in its own units (e.g. 0.1 thousand): mirrors are
+    # compared at the coarser of the two.
+    precision: float | None = None
+    # MOM: workbook sheet to read, and the release files to use if discovery fails.
+    sheet: str | None = None
+    last_known: dict[str, str] = {}
+
+    @field_validator("formats", mode="before")
+    @classmethod
+    def _one_or_many(cls, v: object) -> object:
+        return [v] if isinstance(v, str) else v
 
     @model_validator(mode="after")
     def _catalogued_entries_are_identifiable(self) -> DatasetEntry:
@@ -132,6 +144,13 @@ class Catalog:
     def get(self, dataset_id: str) -> DatasetEntry | None:
         entry = self.datasets.get(dataset_id)
         return entry if entry and entry.catalogued else None
+
+    def mirror_group(self, dataset_id: str) -> set[str]:
+        """Other datasets that republish the same statistic as this one (either direction)."""
+        group = {d.id for d in self.datasets.values() if d.mirror_of == dataset_id or dataset_id in d.mirrors}
+        if (entry := self.datasets.get(dataset_id)) is not None:
+            group |= set(entry.mirrors) | ({entry.mirror_of} if entry.mirror_of else set())
+        return group - {dataset_id}
 
     def search(self, query: str, limit: int = 5) -> list[SearchHit]:
         """Lexical relevance over keyword phrases, title and description."""

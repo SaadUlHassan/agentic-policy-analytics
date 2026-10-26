@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -79,6 +80,11 @@ class NormalizedDataset(BaseModel):
     `artifact_id` hashes the normalised content plus parser/taxonomy versions, never the raw
     bytes: sources stamp responses (e.g. SingStat's dateGenerated), so unchanged data can arrive
     with different bytes and must keep the same identity.
+
+    It also hashes what the source says about its own values (`source_metadata`, e.g. the unit a
+    workbook states) and every blocking quality issue. Two payloads with the same numbers but a
+    different unit or legend are different evidence: one must never be stored or reloaded as the
+    other.
     """
 
     artifact_id: str = ""
@@ -86,6 +92,7 @@ class NormalizedDataset(BaseModel):
     provenance: Provenance
     series: list[SeriesData]
     quality: list[QualityIssue] = Field(default_factory=list)
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
     parser_version: str = PARSER_VERSION
     taxonomy_version: str
 
@@ -96,6 +103,10 @@ class NormalizedDataset(BaseModel):
             "footnotes": self.provenance.footnotes,
             "source_updated_at": self.provenance.source_updated_at,
             "series": [s.model_dump(mode="json") for s in self.series],
+            "source_metadata": self.source_metadata,
+            "blocking_issues": sorted(
+                (i.code, i.series_key or "") for i in self.quality if i.severity is Severity.ERROR
+            ),
             "parser_version": self.parser_version,
             "taxonomy_version": self.taxonomy_version,
         }
