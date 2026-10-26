@@ -81,6 +81,20 @@ export type ConsistencyCheck = {
   citations: string[];
 };
 
+export type QualityCheck = { code: string; severity: "error" | "warning" | "info"; message: string; count: number };
+
+export type DatasetQuality = {
+  dataset_id: string;
+  title: string;
+  platform: string;
+  role: "evidence" | "cross-check";
+  series: string[];
+  from_snapshot: boolean;
+  retrieved_at: string;
+  checks: QualityCheck[];
+  markers: { marker: string; count: number; meaning: string; treatment: string }[];
+};
+
 export type Report = {
   title: string;
   summary: string;
@@ -88,6 +102,7 @@ export type Report = {
   findings: Finding[];
   charts: Chart[];
   consistency_checks: ConsistencyCheck[];
+  data_quality?: DatasetQuality[];
   limitations: { source: string; text: string }[];
   citations: Citation[];
   verification: {
@@ -95,6 +110,7 @@ export type Report = {
     claims_verified: number;
     claims_rejected: number;
     narrative_removed?: { text: string; reason: string }[];
+    narrative_check?: { writers: string[]; judges: string[]; independent: boolean };
   };
 };
 

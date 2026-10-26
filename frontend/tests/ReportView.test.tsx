@@ -106,3 +106,21 @@ describe("splitChart", () => {
     expect(parts.every((p) => p.series.length <= SERIES_COLORS.length)).toBe(true);
   });
 });
+
+describe("verifier independence", () => {
+  it("says when the narrative was checked by the provider that wrote it", () => {
+    const same = { ...report, verification: { ...report.verification, narrative_check: { writers: ["bedrock"], judges: ["bedrock"], independent: false } } };
+    render(<ReportView report={same} />);
+    expect(screen.getByText(/checked by the same provider that wrote it \(bedrock\): not an independent check/)).toBeInTheDocument();
+  });
+
+  it("marks association findings as exploratory", () => {
+    const withAssociation = {
+      ...report,
+      findings: [...report.findings, { id: "k2", kind: "association", text: "Vacancies and hiring tended to be higher together.", citations: [] }],
+    };
+    render(<ReportView report={withAssociation} />);
+    expect(screen.getByText("Exploratory association")).toBeInTheDocument();
+  });
+});
+

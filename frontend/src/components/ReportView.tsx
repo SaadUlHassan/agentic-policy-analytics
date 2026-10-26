@@ -1,3 +1,4 @@
+import { DataQualityPanel } from "@/components/DataQualityPanel";
 import { SeriesChart, splitChart } from "@/components/SeriesChart";
 import type { Citation, Report } from "@/lib/types";
 
@@ -48,6 +49,9 @@ export function ReportView({ report }: { report: Report }) {
           <ol className="flex flex-col gap-2">
             {report.findings.map((f) => (
               <li key={f.id} className="rounded-lg border border-border bg-surface p-3 text-sm">
+                {f.kind === "association" && (
+                  <span className="mr-2 rounded border border-border px-1 text-xs text-ink-2">Exploratory association</span>
+                )}
                 {f.text}
                 {f.citations.map((c) => (
                   <CitationChip key={c} id={c} />
@@ -59,6 +63,10 @@ export function ReportView({ report }: { report: Report }) {
         <p className="mt-2 text-xs text-ink-3">
           {v.claims_verified} of {v.claims_drafted} drafted findings passed evidence checks
           {v.claims_rejected > 0 && `; ${v.claims_rejected} were removed`}.
+          {v.narrative_check &&
+            (v.narrative_check.independent
+              ? ` Narrative checked independently (written by ${v.narrative_check.writers.join(", ")}, checked by ${v.narrative_check.judges.join(", ")}).`
+              : ` Narrative checked by the same provider that wrote it (${v.narrative_check.writers.join(", ")}): not an independent check.`)}
         </p>
       </section>
 
@@ -90,6 +98,8 @@ export function ReportView({ report }: { report: Report }) {
           </ul>
         </section>
       )}
+
+      <DataQualityPanel datasets={report.data_quality ?? []} />
 
       {report.limitations.length > 0 && (
         <section aria-label="Limitations">

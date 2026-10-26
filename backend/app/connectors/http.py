@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from app.connectors.ratelimit import RateLimit, SharedRateLimiter
 from app.core.config import Settings, get_settings
+from app.core.faults import INJECTED, Faults, source_fault
 
 log = structlog.get_logger()
 
@@ -110,6 +111,7 @@ class Fetcher:
         client: httpx.AsyncClient | None = None,
         keys: list[ApiKey] | None = None,
         limiter: SharedRateLimiter | None = None,
+        faults: Faults | None = None,
         attempts: int = 3,
         backoff_s: float = 2.0,
     ) -> None:
@@ -122,6 +124,7 @@ class Fetcher:
         )
         self.keys = keys or []
         self.limiter = limiter or SharedRateLimiter(None)
+        self.faults = faults
         self.attempts = attempts
         self.backoff_s = backoff_s
         # Every payload used so far, by hash: stored alongside the datasets built from them.
@@ -208,6 +211,8 @@ class Fetcher:
     async def _live(
         self, url: str, rate: RateLimit | None, must_contain: bytes | None, accept: str | None
     ) -> RawPayload:
+        if self.faults is not None and (fault := source_fault(url)) and await self.faults.active(fault):
+            raise SourceUnavailable(url, f"{fault} switched off ({INJECTED})")
         key = self._key_for(url)
         reason = "no attempt made"
         for attempt in range(self.attempts):

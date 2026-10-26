@@ -27,6 +27,7 @@ from app.connectors.catalog import get_catalog
 from app.connectors.http import Fetcher, api_keys, get_snapshot_store
 from app.connectors.ratelimit import SharedRateLimiter
 from app.core.config import Provider, Settings
+from app.core.faults import Faults
 from app.data.models import NormalizedDataset, Provenance, QualityIssue
 from app.data.taxonomy import get_taxonomy
 from app.db.models import Analysis, AnalysisArtifact, AnalysisStatus, ComputationRow, DatasetArtifact
@@ -119,8 +120,9 @@ async def execute(
     # Only time spent running counts against the budget; a pause for clarification does not.
     clock = ActiveClock()
     remaining_s = max(0.0, settings.analysis_deadline_s - analysis.active_ms_used / 1000)
+    faults = Faults(publisher, enabled=settings.enable_fault_injection)
     ctx = AgentContext(
-        router=LLMRouter(settings=settings, models=dict(models or {}), on_record=on_record),
+        router=LLMRouter(settings=settings, models=dict(models or {}), on_record=on_record, faults=faults),
         writer=writer,
         catalog=get_catalog(),
         taxonomy=get_taxonomy(),
@@ -129,6 +131,7 @@ async def execute(
             snapshots=get_snapshot_store(),
             keys=api_keys(settings),
             limiter=SharedRateLimiter(publisher),
+            faults=faults,
         ),
         deadline=clock.started + remaining_s,
     )

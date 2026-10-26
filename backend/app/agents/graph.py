@@ -272,6 +272,17 @@ async def report(state: GraphState, runtime: Runtime[AgentContext]) -> dict[str,
         narrative, removed = await _checked_narrative(ctx, state["query"], findings)
     built = build_report(plan, ctx.evidence, narrative, question=state["query"])
     built["verification"]["narrative_removed"] = removed
+    if check := _narrative_check_independence(ctx):
+        built["verification"]["narrative_check"] = check
+        if not check["independent"]:
+            built["limitations"].append(
+                {
+                    "source": "verification",
+                    "text": f"The narrative was checked by the same model provider that wrote it "
+                    f"({', '.join(check['writers'])}); the other provider was unavailable, so the "
+                    "check was not independent.",
+                }
+            )
     if not plan.in_scope:
         built["limitations"].insert(0, {"source": "coordinator", "text": plan.scope_note or "Out of scope."})
     # Completed only when every planned sector x metric has a verified finding and nothing was refused.
@@ -289,6 +300,17 @@ async def report(state: GraphState, runtime: Runtime[AgentContext]) -> dict[str,
         },
     )
     return {"report": built, "status": status.value}
+
+
+def _narrative_check_independence(ctx: AgentContext) -> dict[str, Any] | None:
+    """Whether every narrative check was made by a different provider from every writer of the
+    text it checked (plan §3.1). None when no narrative was written and checked."""
+    answered = ctx.router.answered_by
+    writers = sorted({*answered.get("report", []), *answered.get("report_rewrite", [])})
+    judges = sorted(set(answered.get("narrative_check", [])))
+    if not writers or not judges:
+        return None
+    return {"writers": writers, "judges": judges, "independent": not set(writers) & set(judges)}
 
 
 async def _judge(ctx: AgentContext, findings: list[str], sentences: list[str]) -> dict[int, str]:

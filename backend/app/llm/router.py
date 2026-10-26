@@ -22,6 +22,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
 from app.core.config import Provider, Settings
+from app.core.faults import INJECTED, Faults, InjectedFault
 from app.llm import providers
 
 log = structlog.get_logger()
@@ -130,6 +131,10 @@ class LLMRouter:
     circuit_threshold: int = 3
     circuit_cooldown_s: float = 60.0
     clock: Callable[[], float] = time.monotonic
+    faults: Faults | None = None
+    # Which provider answered each purpose, in order: e.g. whether a narrative check was made by a
+    # different model from the one that wrote the narrative.
+    answered_by: dict[str, list[Provider]] = field(default_factory=dict)
     _circuits: dict[Provider, _Circuit] = field(default_factory=dict)
 
     def model(self, provider: Provider) -> BaseChatModel:
@@ -228,6 +233,8 @@ class LLMRouter:
                     raise LLMUnavailable("; ".join([*errors, "deadline exceeded"]))
                 started = self.clock()
                 try:
+                    if self.faults is not None and await self.faults.active(f"llm:{provider}"):
+                        raise InjectedFault(f"{provider} switched off ({INJECTED})")
                     result, raw = await call(self.model(provider), timeout)
                 except Exception as exc:
                     retry = is_retryable(exc) and attempt + 1 < self.attempts_per_provider
@@ -241,6 +248,7 @@ class LLMRouter:
                     break
                 circuit.record(True, self.clock())
                 await self._record(provider, agent, purpose, started, raw, None, previous_failed)
+                self.answered_by.setdefault(purpose, []).append(provider)
                 return result
         raise LLMUnavailable("; ".join(errors) or "no providers configured")
 

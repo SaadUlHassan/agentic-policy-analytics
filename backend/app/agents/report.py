@@ -12,6 +12,8 @@ from app.agents.evidence import ConsistencyCheck, EvidenceStore
 from app.agents.plan import ResearchPlan
 from app.agents.tools import plan_window
 from app.analytics.results import Refusal
+from app.connectors.catalog import get_catalog
+from app.data.models import NormalizedDataset, QualityIssue
 from app.grounding.checks import check_free_text
 from app.grounding.citations import CitationIndex, EvidenceRef, claim_refs
 from app.grounding.render import DISPLAY_ROUNDING_VERSION, render_claim
@@ -85,6 +87,7 @@ def build_report(
         "findings": findings,
         "charts": charts,
         "consistency_checks": consistency,
+        "data_quality": _data_quality(evidence),
         "coverage": coverage,
         "limitations": [
             *[
@@ -235,11 +238,69 @@ def _derived_limitations(evidence: EvidenceStore) -> list[dict[str, str]]:
     for dataset in evidence.datasets.values():
         if not any(s.key in selected_keys for s in dataset.series):
             continue
-        for issue in dataset.quality:
-            # Issues raised before regime splitting are keyed without the "@scheme" suffix.
-            relevant = issue.series_key is None or any(
-                k == issue.series_key or k.startswith(f"{issue.series_key}@") for k in selected_keys
-            )
-            if relevant and (issue.severity != "info" or issue.code == "SERVED_FROM_SNAPSHOT"):
+        for issue in _relevant_issues(dataset, selected_keys):
+            if issue.severity != "info" or issue.code == "SERVED_FROM_SNAPSHOT":
                 out.append({"source": "data", "text": f"{dataset.dataset_id}: {issue.message}"})
+    return out
+
+
+def _relevant_issues(dataset: NormalizedDataset, keys: set[str]) -> list[QualityIssue]:
+    """Dataset-wide issues, and issues about the given series. Issues raised before regime
+    splitting are keyed without the "@scheme" suffix."""
+    return [
+        i
+        for i in dataset.quality
+        if i.series_key is None or any(k == i.series_key or k.startswith(f"{i.series_key}@") for k in keys)
+    ]
+
+
+def _data_quality(evidence: EvidenceStore) -> list[dict[str, Any]]:
+    """What was checked on each dataset the report relies on, and what was found (plan GD-4): the
+    datasets of selected series ("evidence") and the republications they were cross-checked against
+    ("cross-check"). Marker meanings are the source's own, as reviewed in the manifest."""
+    selected = set(evidence.selected)
+    cross_checked = {a for c in evidence.consistency for a in (c.artifact_a, c.artifact_b)}
+    platforms = get_catalog().platforms
+    out = []
+    for dataset in evidence.datasets.values():
+        used = [s for s in dataset.series if s.key in selected]
+        if not used and dataset.artifact_id not in cross_checked:
+            continue
+        keys = {s.key for s in used} or {
+            k
+            for c in evidence.consistency
+            for k in (c.series_a, c.series_b)
+            if k.startswith(f"{dataset.dataset_id}:")
+        }
+        markers: dict[str, int] = defaultdict(int)
+        for series in dataset.series:
+            if series.key in keys:
+                for o in series.observations:
+                    if o.marker is not None:
+                        markers[o.raw] += 1
+        legend = platforms[dataset.provenance.platform].markers
+        out.append(
+            {
+                "dataset_id": dataset.dataset_id,
+                "title": dataset.provenance.title,
+                "platform": dataset.provenance.platform,
+                "role": "evidence" if used else "cross-check",
+                "series": sorted(keys),
+                "from_snapshot": dataset.provenance.from_snapshot,
+                "retrieved_at": dataset.provenance.retrieved_at.isoformat(),
+                "checks": [
+                    {"code": i.code, "severity": i.severity, "message": i.message, "count": i.count}
+                    for i in _relevant_issues(dataset, keys)
+                ],
+                "markers": [
+                    {
+                        "marker": raw,
+                        "count": n,
+                        "meaning": legend[raw].meaning if raw in legend else "not defined by the source",
+                        "treatment": "set to null and excluded from calculations",
+                    }
+                    for raw, n in sorted(markers.items())
+                ],
+            }
+        )
     return out
