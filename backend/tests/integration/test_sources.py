@@ -117,3 +117,20 @@ async def test_a_reused_artifact_keeps_each_analysis_own_disclosures_on_resume(s
     assert "DISCOVERY_FALLBACK" not in {i.code for i in resumed["first"].quality}
     assert "DISCOVERY_FALLBACK" in {i.code for i in resumed["second"].quality}
     assert resumed["second"].provenance.retrieved_at == after_outage.provenance.retrieved_at
+
+
+async def test_worker_health_check_reads_the_arq_health_key(redis_client, monkeypatch):
+    from arq.constants import default_queue_name, health_check_key_suffix
+
+    from app.core.config import Settings
+    from app.worker import health
+
+    url = redis_client.connection_pool.connection_kwargs
+    monkeypatch.setattr(
+        health,
+        "get_settings",
+        lambda: Settings(_env_file=None, redis_url=f"redis://{url['host']}:{url['port']}/{url['db']}"),
+    )
+    assert await health.main() == 1, "no health record: the worker is not running"
+    await redis_client.set(default_queue_name + health_check_key_suffix, "j_complete=0", ex=16)
+    assert await health.main() == 0
