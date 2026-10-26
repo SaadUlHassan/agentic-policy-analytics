@@ -429,20 +429,22 @@ def correlation_candidates(selected: dict[str, Selection]) -> list[tuple[str, st
 def suggested_correlations(
     toolkit: Toolkit, selected: dict[str, Selection], plan: ResearchPlan
 ) -> tuple[list[dict[str, str]], list[Refusal]]:
-    """Eligible correlations at each allowed lag, and the refusal for every candidate pair that no
-    pairing rule allows (e.g. REFERENCE_MISMATCH): a refusal is a finding about the evidence too."""
+    """Correlations that are eligible at each lag a pairing rule allows, and the refusal for every
+    candidate pair or lag that is not (e.g. REFERENCE_MISMATCH, or too few pairs at lag 1): a
+    refusal is a finding about the evidence too. Every lag is checked, not just the first."""
     suggestions, refusals = [], []
     for a, b in correlation_candidates(selected):
         x, y = selected[a], selected[b]
+        rule = find_rule(x.source.identity, y.source.identity) or find_rule(
+            y.source.identity, x.source.identity
+        )
         window = plan_window(plan, x.source.identity.frequency)
-        probe = toolkit.correlate(x.source, x.series, y.source, y.series, window[0], window[-1], 0)
-        if isinstance(probe, Refusal):
-            refusals.append(probe)
-            continue
-        leader, follower = probe.inputs  # correlate orders them as its pairing rule does
-        rule = find_rule(leader.identity, follower.identity)
-        assert rule is not None
-        for lag in sorted(rule.lags):
+        for lag in sorted(rule.lags) if rule else [0]:
+            probe = toolkit.correlate(x.source, x.series, y.source, y.series, window[0], window[-1], lag)
+            if isinstance(probe, Refusal):
+                refusals.append(probe)
+                continue
+            leader, follower = probe.inputs  # correlate orders them as its pairing rule does
             suggestions.append(
                 {
                     "tool": "correlate",
@@ -451,7 +453,9 @@ def suggested_correlations(
                     "start": window[0],
                     "end": window[-1],
                     "lag": str(lag),
-                    "pairs": rule.lag_meaning[lag],
+                    "pairs": f"{probe.result['pairs'].value:.0f} aligned pairs: {rule.lag_meaning[lag]}"
+                    if rule
+                    else "",
                 }
             )
     return suggestions, refusals
@@ -493,38 +497,48 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                 }
             )
         for refusal in refusals:
-            if refusal not in ctx.evidence.refusals:
-                ctx.evidence.refusals.append(refusal)
-                await ctx.writer.emit(
-                    "analytics",
-                    "refusal",
-                    f"correlate refused: {refusal.code}",
-                    {"series_key": refusal.series_key, "code": refusal.code, "detail": refusal.detail},
-                )
+            await _record_refusal(refusal)
         if refusals:
             out.append({"correlations_not_allowed": [f"{r.code}: {r.detail}" for r in refusals]})
         return out or [{"note": "no series selected"}]
 
+    def _known(result: Computation | Refusal) -> bool:
+        if isinstance(result, Refusal):
+            return any(r.identity() == result.identity() for r in ctx.evidence.refusals)
+        return result.id in ctx.evidence.computations
+
+    async def _record_refusal(refusal: Refusal) -> None:
+        if _known(refusal):
+            return
+        ctx.evidence.refusals.append(refusal)
+        await ctx.writer.emit(
+            "analytics",
+            "refusal",
+            f"{refusal.tool} refused: {refusal.code}",
+            {
+                "series_key": refusal.series_key,
+                "other_series_key": refusal.other_series_key,
+                "code": refusal.code,
+                "detail": refusal.detail,
+            },
+        )
+
     async def compute(tool: ToolName, series_key: str, rationale: str = "", **params: str | None) -> Any:
         nonlocal computed_this_round
-        if computed_this_round >= MAX_COMPUTATIONS_PER_ROUND:
-            return (
-                f"BUDGET: {MAX_COMPUTATIONS_PER_ROUND} computations already done this round. "
-                "Draft claims from the existing computations now."
-            )
         selection = ctx.evidence.selected.get(series_key)
         if selection is None:
             raise RuntimeError(f"{series_key!r} is not a selected series")
         needed = _ARGS[tool]
         if missing := [a for a in needed if not params.get(a)]:
             raise RuntimeError(f"{tool} needs {', '.join(missing)}")
-        args = [params[a] for a in needed]
+        # The tools are deterministic and cheap, so the result is worked out first: reusing an earlier
+        # result (or refusal) is free and still allowed once the round's budget is spent.
+        result: Computation | Refusal
         if tool == "correlate":
             other = ctx.evidence.selected.get(params.get("other_series_key") or "")
             if other is None:
                 raise RuntimeError("correlate needs other_series_key: a second selected series")
-            computed_this_round += 1
-            result: Computation | Refusal = ctx.toolkit.correlate(
+            result = ctx.toolkit.correlate(
                 selection.source,
                 selection.series,
                 other.source,
@@ -534,26 +548,25 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                 params.get("lag") or "0",
             )
         else:
-            computed_this_round += 1
-            result = getattr(ctx.toolkit, tool)(selection.source, selection.series, *args)
-        if isinstance(result, Refusal) and result.code is RefusalCode.INVALID_WINDOW:
-            computed_this_round -= 1  # an argument mistake, not an analysis: report it to the agent only
-            raise RuntimeError(f"invalid arguments: {result.detail}")
-        if isinstance(result, Refusal) and result in ctx.evidence.refusals:
-            computed_this_round -= 1  # nothing new learned: do not spend the budget on it
-            return f"REFUSED {result.code} (already recorded): {result.detail}"
-        if isinstance(result, Computation) and result.id in ctx.evidence.computations:
-            computed_this_round -= 1  # same evidence and method: the earlier result is reused
-            return {**_describe(result), "note": "already computed; draft from this computation_id"}
-        if isinstance(result, Refusal):
-            ctx.evidence.refusals.append(result)
-            await ctx.writer.emit(
-                "analytics",
-                "refusal",
-                f"{tool} refused: {result.code}",
-                {"series_key": series_key, "code": result.code, "detail": result.detail},
+            result = getattr(ctx.toolkit, tool)(
+                selection.source, selection.series, *(params[a] for a in needed)
             )
+        if isinstance(result, Refusal) and result.code is RefusalCode.INVALID_WINDOW:
+            raise RuntimeError(f"invalid arguments: {result.detail}")  # a mistake, not an analysis
+        if _known(result) and isinstance(result, Refusal):
+            return f"REFUSED {result.code} (already recorded): {result.detail}"
+        if _known(result) and isinstance(result, Computation):
+            return {**_describe(result), "note": "already computed; draft from this computation_id"}
+        if computed_this_round >= MAX_COMPUTATIONS_PER_ROUND:
+            return (
+                f"BUDGET: {MAX_COMPUTATIONS_PER_ROUND} computations already done this round. "
+                "Draft claims from the existing computations now."
+            )
+        computed_this_round += 1
+        if isinstance(result, Refusal):
+            await _record_refusal(result)
             return f"REFUSED {result.code}: {result.detail}"
+        assert isinstance(result, Computation)
         ctx.evidence.computations[result.id] = result
         await ctx.writer.save_computation(result)
         await ctx.writer.emit(

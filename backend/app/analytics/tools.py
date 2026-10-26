@@ -363,6 +363,9 @@ class Toolkit:
                 raise ValueError("lag must be 0 or more and fit inside the window")
         except ValueError as exc:
             return refuse("INVALID_WINDOW", str(exc))
+        # Canonical spellings ("01" is lag 1, "2020 1Q" is 2020-Q1): one request, one identity.
+        start, end = str(s), str(e)
+        params.update(start=start, end=end, lag=str(lag_n))
         if correlation.find_rule(x_source.identity, y_source.identity) is None and correlation.find_rule(
             y_source.identity, x_source.identity
         ):
@@ -390,14 +393,20 @@ class Toolkit:
             correlation.EXPLORATORY_NOTE,
             f"{rule.name}, lag {lag_n}: {rule.lag_meaning[lag_n]}",
             f"{len(aligned.pairs)} aligned pairs",
+        ]
+        caveats = [
+            "consecutive quarters are serially dependent, so the coefficient overstates how much "
+            "independent evidence there is; it shows co-movement, not cause",
             *rule.caveats,
         ]
-        if aligned.skipped:
-            notes.append(f"pairs skipped for missing values: {', '.join(aligned.skipped)}")
         if x_source.identity.population != y_source.identity.population:
-            notes.append(
-                f"different populations: {x_source.identity.population} vs {y_source.identity.population}"
+            caveats.append(
+                "the two series count different populations ("
+                f"{x_source.identity.population.replace('_', ' ')} vs "
+                f"{y_source.identity.population.replace('_', ' ')})"
             )
+        if aligned.skipped:
+            caveats.append(f"quarters left out for missing values: {', '.join(aligned.skipped)}")
         sources = [x_source, y_source]
         fp = fingerprint("correlate", params, sources, self.taxonomy_version)
         refs = [
@@ -417,4 +426,5 @@ class Toolkit:
             },
             interpretation_allowed=Interpretation.EXPLORATORY_ASSOCIATION,
             notes=notes,
+            caveats=caveats,
         )

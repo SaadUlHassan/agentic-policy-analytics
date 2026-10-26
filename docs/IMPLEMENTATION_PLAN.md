@@ -1001,13 +1001,15 @@ All of the following was verified live: the example query on Bedrock primary, on
   - Annual year-end employment vs annual vacancies (a mean of four quarter ends) is refused with `REFERENCE_MISMATCH`, as planned.
 - **Pairing rules are oriented.** The leading series comes first; for stock × flow, lag 1 pairs the stock at the end of a quarter with the flow over the next quarter. Arguments given the other way round are reordered, not refused.
 - **Both members of a pair must lie in the window.** The named pair (M184071 vacancies × M183891 employment change, 2020-Q1..2024-Q4) gives n = 20 at lag 0 and n = 19 at lag 1. Incomplete pairs are skipped and listed, never filled.
-- **Descriptive output only:** Pearson r, Spearman ρ and the pair count, with no p-values (consecutive quarters are serially dependent). Population differences are recorded as caveats.
+- **Descriptive output only:** Pearson r, Spearman ρ and the pair count, with no p-values (consecutive quarters are serially dependent).
+- **Caveats travel with the finding.** Serial dependence, population differences, rule caveats and skipped quarters are a computation's `caveats`. Every retained finding's caveats are added to the report limitations deterministically.
+- **One request, one identity.** Lag and window spellings are canonicalised before fingerprinting and rendering ("01" is lag 1; "2020 1Q" is 2020-Q1). A refusal is identified by tool, code, the unordered pair of series and the parameters, so the same pair refused in reverse order is recorded once.
 - **Associations are stated with `assoc.positive`, `assoc.negative` or `assoc.weak`.** The positive and negative predicates need |r| ≥ 0.3; weak needs |r| < 0.3.
   - They are allowed only in association claims on exploratory computations.
   - The rendered text names both series and the lag, keeps the sign, and says "exploratory, not evidence of cause".
   - The claim kind follows from the predicate, not from what the model calls it.
-- **Pairs are evaluated deterministically.** `list_evidence` evaluates every same-sector pair of selected series measuring different metrics. Eligible correlations are listed first under the leading series. Ineligible pairs are recorded once as refusals, visible in the timeline and the report.
-- **A repeated computation reuses the earlier result without spending the round's budget.** In a live run, the second analytics round had re-computed the same statistics and never reached the correlation.
+- **Pairs are evaluated deterministically, lag by lag.** `list_evidence` evaluates every same-sector pair of selected series measuring different metrics, at every lag its rule allows. Eligible lags are listed first under the leading series, with their pair count. Ineligible pairs or lags (e.g. 11 pairs at lag 1 over 2022–2024) are recorded once as refusals, visible in the timeline and the report.
+- **Reuse is checked before the budget.** A repeated computation returns the earlier result without spending the round's budget, even once the budget is used up. In a live run, the second analytics round had re-computed the same statistics and never reached the correlation.
 
 **Golden values (snapshot of 25 Oct 2026, independently recomputed in the tests):** lag 0 r = 0.468, ρ = 0.471 (n = 20); lag 1 r = 0.360, ρ = 0.311 (n = 19).
 

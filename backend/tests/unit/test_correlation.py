@@ -89,7 +89,7 @@ async def test_named_pair_matches_independently_computed_values(pair, lag, n):
     assert result.interpretation_allowed is Interpretation.EXPLORATORY_ASSOCIATION
     assert set(result.result) == {"pearson_r", "spearman_rho", "pairs"}, "no p-values"
     assert "not causal" in result.notes[0]
-    assert any("establishments vs total_employment" in note for note in result.notes)
+    assert "the two series count different populations (establishments vs total employment)" in result.caveats
 
 
 async def test_lag_one_pairs_each_quarter_end_with_the_following_quarter_inside_the_window(pair):
@@ -181,7 +181,7 @@ def test_missing_values_shrink_n_and_are_listed_never_filled():
     y = _quarterly(flow, MeasureType.FLOW, "quarter_end_difference")
     result = _ok(TOOLS.correlate(*x, *y, *WINDOW, 0))
     assert result.result["pairs"].value == 19
-    assert "pairs skipped for missing values: 2020-Q4" in result.notes
+    assert "quarters left out for missing values: 2020-Q4" in result.caveats
 
 
 def test_a_constant_series_has_no_correlation():
@@ -244,3 +244,17 @@ async def test_a_weak_correlation_can_only_be_described_as_little_association():
     assert abs(weak.result["pearson_r"].value) < 0.3
     assert not verify_claim(_association(weak, predicate="assoc.negative"), {weak.id: weak}).passed
     assert verify_claim(_association(weak, predicate="assoc.weak"), {weak.id: weak}).passed
+
+
+async def test_every_spelling_of_a_lag_and_window_is_one_request(pair):
+    (vac_src, vac), (emp_src, emp) = pair
+    canonical = _ok(TOOLS.correlate(vac_src, vac, emp_src, emp, *WINDOW, "1"))
+    for lag, start in (("01", "2020-Q1"), (1, "2020 1Q")):
+        variant = _ok(TOOLS.correlate(vac_src, vac, emp_src, emp, start, "2024-Q4", lag))
+        assert variant.id == canonical.id and variant.params == {
+            "start": "2020-Q1",
+            "end": "2024-Q4",
+            "lag": "1",
+        }
+    claim = _association(canonical)
+    assert "in the following quarter" in render_claim(claim, {canonical.id: canonical})

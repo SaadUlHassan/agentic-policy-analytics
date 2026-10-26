@@ -204,8 +204,25 @@ def _refusal_text(refusal: Refusal, evidence: EvidenceStore) -> str:
     return f"{refusal.tool} on {name(refusal.series_key)} was not computed: {refusal.code} ({refusal.detail})"
 
 
+def _finding_caveats(evidence: EvidenceStore) -> list[dict[str, str]]:
+    """Caveats of the computations behind retained findings (e.g. a correlation between series that
+    count different populations). Added deterministically: the narrative may not mention them."""
+    out: list[dict[str, str]] = []
+    for claim in evidence.verified_claims():
+        for assertion in claim.assertions.values():
+            computation = evidence.computations[assertion.computation_id]
+            names = [i.identity.subject() for i in computation.inputs]
+            subjects = " and ".join([names[0], *(n[:1].lower() + n[1:] for n in names[1:])])
+            for caveat in computation.caveats:
+                item = {"source": "analysis", "text": f"{subjects}: {caveat}"}
+                if item not in out:
+                    out.append(item)
+    return out
+
+
 def _derived_limitations(evidence: EvidenceStore) -> list[dict[str, str]]:
     out = [{"source": "analysis", "text": _refusal_text(r, evidence)} for r in evidence.refusals]
+    out += _finding_caveats(evidence)
     rejected = len(evidence.claims) - len(evidence.verified_claims())
     if rejected:
         out.append(
