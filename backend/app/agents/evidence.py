@@ -34,9 +34,13 @@ class ConsistencyCheck:
     periods: list[str]
     mismatches: list[dict]
     tolerance: float = 0.0  # in base units: half the coarser published increment
+    # Set when the two could not be compared at all (e.g. one side has a blocking quality error).
+    not_comparable: str | None = None
 
     @property
     def verdict(self) -> str:
+        if self.not_comparable:
+            return f"not comparable ({self.not_comparable})"
         if not self.periods:
             return "no overlapping periods"
         if self.mismatches:

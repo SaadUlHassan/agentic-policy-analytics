@@ -285,9 +285,11 @@ async def test_a_mirror_with_blocking_errors_is_not_reported_consistent():
     )
 
     assert "not comparable (blocking quality errors: mrsd_3_qtly_emp_chg_by_ind: UNIT_MISMATCH)" in reply
-    assert "consistent" not in reply and ctx.evidence.consistency == []
+    assert "consistent" not in reply
+    (check,) = ctx.evidence.consistency  # recorded as refused, never as agreement
+    assert check.not_comparable and check.verdict.startswith("not comparable") and not check.periods
     events = [d for t, _, d in ctx.writer.events if t == "consistency_check"]
-    assert events and events[-1]["blocking_issues"]
+    assert events and "UNIT_MISMATCH" in events[-1]["not_comparable"]
 
 
 async def test_analytics_agent_can_correlate_the_named_pair_and_state_it_as_an_association():
@@ -505,3 +507,94 @@ async def test_caveats_of_a_retained_association_are_in_the_report():
         "Communications: the two series count different populations (establishments vs total employment)"
     ) in texts
     assert any("serially dependent" in t for t in texts)
+
+
+# -- data-quality panel ----------------------------------------------------------------------------
+
+
+def _panel(plan, ctx) -> dict[str, dict]:
+    from app.agents.report import build_report
+
+    return {d["dataset_id"]: d for d in build_report(plan, ctx.evidence, None, question="q")["data_quality"]}
+
+
+def _in_hundreds(sheet) -> None:
+    from tests.unit.data.test_quality_mutations import _cells
+
+    for cell in _cells(sheet, lambda v: v == "In Thousands"):
+        cell.value = "In Hundreds"
+
+
+async def test_a_refused_cross_check_and_its_errors_stay_in_the_panel():
+    from tests.unit.data.test_quality_mutations import MOM_Q, MOM_Q_XLSX, MutatedSnapshots, _edit_workbook
+
+    ctx = _ctx()
+    ctx.fetcher = Fetcher(
+        mode="snapshot", snapshots=MutatedSnapshots({MOM_Q_XLSX: _edit_workbook(_in_hundreds)})
+    )
+    plan = PLAN.model_copy(update={"metrics": ["employment_change"]})
+    tools = _tools(extraction_tools(ctx, plan))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M183891", "rationale": "r"})
+    await tools["select_series"].ainvoke(
+        {"series_key": "M183891:1.2.4@SSIC2020", "reason": "fits", "rationale": "r"}
+    )
+
+    panel = _panel(plan, ctx)
+
+    assert panel[MOM_Q]["role"] == "cross-check"
+    assert any(c["code"] == "UNIT_MISMATCH" and c["severity"] == "error" for c in panel[MOM_Q]["checks"])
+
+
+async def test_the_panel_states_the_meaning_the_fetched_workbook_gives_a_marker():
+    from tests.unit.data.test_quality_mutations import (
+        MOM_Q,
+        MOM_Q_XLSX,
+        MutatedSnapshots,
+        _cells,
+        _edit_workbook,
+    )
+
+    def redefine(sheet) -> None:
+        for cell in _cells(sheet, lambda v: v.startswith("'-'")):
+            cell.value = "'-' :  Not available"
+
+    ctx = _ctx()
+    ctx.fetcher = Fetcher(mode="snapshot", snapshots=MutatedSnapshots({MOM_Q_XLSX: _edit_workbook(redefine)}))
+    plan = PLAN.model_copy(update={"sectors": ["manufacturing"], "metrics": ["employment_change"]})
+    tools = _tools(extraction_tools(ctx, plan))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": MOM_Q, "rationale": "r"})
+    key = ctx.evidence.dataset(MOM_Q).find("manufacturing")[0].key
+    await tools["select_series"].ainvoke({"series_key": key, "reason": "fits", "rationale": "r"})
+
+    dataset = _panel(plan, ctx)[MOM_Q]
+
+    assert dataset["markers"][0]["meaning"] == "Not available"  # what this workbook says, not the manifest
+    assert any(c["code"] == "LEGEND_CHANGED" for c in dataset["checks"])
+
+
+async def test_a_dataset_used_both_ways_lists_its_cross_checked_series_too():
+    from app.connectors import singstat
+    from tests.unit.data.test_quality_mutations import MutatedSnapshots, _edit_singstat
+
+    def unknown_marker(row: dict) -> None:
+        if row["seriesNo"] == "1.1.1":  # manufacturing
+            next(c for c in row["columns"] if c["key"].startswith("2019"))["value"] = "x"
+
+    ctx = _ctx()
+    ctx.fetcher = Fetcher(
+        mode="snapshot",
+        snapshots=MutatedSnapshots({singstat.tabledata_url("M184071", 0): _edit_singstat(unknown_marker)}),
+    )
+    plan = PLAN.model_copy(update={"sectors": ["info_comms", "manufacturing"]})
+    tools = _tools(extraction_tools(ctx, plan))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M184071", "rationale": "r"})
+    await tools["select_series"].ainvoke({"series_key": VACANCIES, "reason": "fits", "rationale": "r"})
+    # Manufacturing is taken from the Data.gov.sg copy, so M184071's manufacturing row is only a cross-check.
+    mirror = ctx.evidence.dataset("d_3f17bbf67d31d4d402caa8755eb74afc").find("manufacturing")[0].key
+    await tools["select_series"].ainvoke({"series_key": mirror, "reason": "fits", "rationale": "r"})
+
+    dataset = _panel(plan, ctx)["M184071"]
+
+    assert dataset["role"] == "evidence"
+    assert {VACANCIES, "M184071:1.1.1@SSIC2020"} <= set(dataset["series"])
+    assert any(c["code"] == "UNLISTED_MARKER" for c in dataset["checks"])

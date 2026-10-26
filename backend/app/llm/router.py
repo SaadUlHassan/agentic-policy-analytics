@@ -22,6 +22,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
 from app.core.config import Provider, Settings
+from app.core.faults import INJECTED, Faults, InjectedFault
 from app.llm import providers
 
 log = structlog.get_logger()
@@ -72,6 +73,8 @@ class CallRecord:
     output_tokens: int | None = None
     error: str | None = None
     fallback_from: Provider | None = None
+    # Why the previous provider was given up on (e.g. an injected fault), when this is a fallback.
+    fallback_reason: str | None = None
 
 
 @dataclass
@@ -80,6 +83,7 @@ class _Circuit:
     cooldown_s: float
     failures: int = 0
     opened_at: float | None = None
+    last_error: str | None = None  # the failure that opened it, reported while it stays open
 
     def is_open(self, now: float) -> bool:
         if self.opened_at is None:
@@ -89,11 +93,12 @@ class _Circuit:
             return False
         return True
 
-    def record(self, ok: bool, now: float) -> None:
+    def record(self, ok: bool, now: float, error: str | None = None) -> None:
         if ok:
-            self.failures, self.opened_at = 0, None
+            self.failures, self.opened_at, self.last_error = 0, None, None
             return
         self.failures += 1
+        self.last_error = error
         if self.failures >= self.threshold:
             self.opened_at = now
 
@@ -130,6 +135,10 @@ class LLMRouter:
     circuit_threshold: int = 3
     circuit_cooldown_s: float = 60.0
     clock: Callable[[], float] = time.monotonic
+    faults: Faults | None = None
+    # Which provider answered each purpose, in order: e.g. whether a narrative check was made by a
+    # different model from the one that wrote the narrative.
+    answered_by: dict[str, list[Provider]] = field(default_factory=dict)
     _circuits: dict[Provider, _Circuit] = field(default_factory=dict)
 
     def model(self, provider: Provider) -> BaseChatModel:
@@ -208,6 +217,7 @@ class LLMRouter:
         order = order or list(self.settings.llm_provider_order)
         errors: list[str] = []
         previous_failed: Provider | None = None
+        previous_error: str | None = None
         for index, provider in enumerate(order):
             circuit = self._circuits.setdefault(
                 provider, _Circuit(self.circuit_threshold, self.circuit_cooldown_s)
@@ -215,6 +225,7 @@ class LLMRouter:
             if circuit.is_open(self.clock()):
                 errors.append(f"{provider}: circuit open")
                 previous_failed = provider
+                previous_error = f"circuit open after {circuit.last_error or 'repeated failures'}"
                 continue
             is_last = index == len(order) - 1
             for attempt in range(self.attempts_per_provider):
@@ -223,24 +234,33 @@ class LLMRouter:
                     # Too little time for this provider and a fallback: give it all to the fallback.
                     errors.append(f"{provider}: skipped to leave the remaining time to the fallback")
                     previous_failed = provider
+                    previous_error = "skipped to leave the remaining time to the fallback"
                     break
                 if timeout <= 0:
                     raise LLMUnavailable("; ".join([*errors, "deadline exceeded"]))
                 started = self.clock()
                 try:
+                    if self.faults is not None and await self.faults.active(f"llm:{provider}"):
+                        raise InjectedFault(f"{provider} switched off ({INJECTED})")
                     result, raw = await call(self.model(provider), timeout)
                 except Exception as exc:
                     retry = is_retryable(exc) and attempt + 1 < self.attempts_per_provider
-                    await self._record(provider, agent, purpose, started, None, exc, previous_failed)
+                    await self._record(
+                        provider, agent, purpose, started, None, exc, previous_failed, previous_error
+                    )
                     if retry:
                         await asyncio.sleep(self.backoff_s * (attempt + 1))
                         continue
-                    circuit.record(False, self.clock())
-                    errors.append(f"{provider}: {type(exc).__name__}: {str(exc)[:160]}")
-                    previous_failed = provider
+                    failure = f"{type(exc).__name__}: {str(exc)[:160]}"
+                    circuit.record(False, self.clock(), failure)
+                    errors.append(f"{provider}: {failure}")
+                    previous_failed, previous_error = provider, failure
                     break
                 circuit.record(True, self.clock())
-                await self._record(provider, agent, purpose, started, raw, None, previous_failed)
+                await self._record(
+                    provider, agent, purpose, started, raw, None, previous_failed, previous_error
+                )
+                self.answered_by.setdefault(purpose, []).append(provider)
                 return result
         raise LLMUnavailable("; ".join(errors) or "no providers configured")
 
@@ -259,6 +279,7 @@ class LLMRouter:
         raw: Any,
         exc: BaseException | None,
         fallback_from: Provider | None,
+        fallback_reason: str | None = None,
     ) -> None:
         usage = getattr(raw, "usage_metadata", None) or {}
         record = CallRecord(
@@ -272,6 +293,7 @@ class LLMRouter:
             output_tokens=usage.get("output_tokens"),
             error=None if exc is None else f"{type(exc).__name__}: {str(exc)[:200]}",
             fallback_from=fallback_from,
+            fallback_reason=fallback_reason if fallback_from else None,
         )
         log.info("llm_call", **{k: v for k, v in record.__dict__.items() if k != "error"}, error=record.error)
         if self.on_record is not None:

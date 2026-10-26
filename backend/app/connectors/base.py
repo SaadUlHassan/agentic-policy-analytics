@@ -26,7 +26,9 @@ def assemble(
 ) -> NormalizedDataset:
     issues = [*issues, *flag_ambiguous_sectors(series)]
     if unidentified := [s for s in series if s.identity is None]:
-        labels = ", ".join(dict.fromkeys(s.label for s in unidentified))
+        # A label can be identified under one classification and not another (e.g. M182841's
+        # SSIC 2005 years), so each row is named with the classification it was read under.
+        labels = ", ".join(dict.fromkeys(f"{s.label} ({s.key.rpartition('@')[2]})" for s in unidentified))
         issues.append(
             QualityIssue(
                 code="UNIDENTIFIED_SERIES",

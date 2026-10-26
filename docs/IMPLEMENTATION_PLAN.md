@@ -1015,3 +1015,34 @@ All of the following was verified live: the example query on Bedrock primary, on
 
 **Verified live:** the demo question ("Analyse employment trends in the technology sector from 2020-2024") reported both correlations as exploratory associations. It also recorded `FREQ_MISMATCH` refusals for annual employment against the two quarterly series.
 
+## M2 outcomes: fault injection, verifier independence, data-quality panel
+
+**Delivered:** demo fault switches, a record of whether the narrative check was independent, and a data-quality panel in the report.
+
+**Decisions taken while building:**
+- **Faults are named switches in Redis with an expiry** (default 10 minutes, at most 1 hour), so the API sets them, every worker sees them, and a forgotten switch turns itself off.
+  - Switches: `llm:bedrock`, `llm:openai`, `source:singstat`, `source:datagov`, `source:mom`.
+  - Routes: `GET/PUT/DELETE /api/admin/faults[/{name}]`. They are mounted only when `ENABLE_FAULT_INJECTION=true`, which the settings refuse when `APP_ENV=prod`, so the routes do not exist in production.
+  - Compose passes the flag through, e.g. `ENABLE_FAULT_INJECTION=true docker compose up -d`, then `curl -X PUT localhost:8000/api/admin/faults/llm:bedrock`.
+- **An injected failure is never disguised.**
+  - A switched-off provider fails in the router like a real outage, so the fallback, the circuit breaker and the `provider_fallback` events all behave as they would for a real failure. The ledger records the failure as injected.
+  - Every fallback event states its cause: "bedrock switched off (injected fault (demo)); answered by openai". This holds after the circuit opens too, because the circuit remembers the failure that opened it.
+  - A switched-off source is served from its snapshot. The disclosure reads "source:singstat switched off (injected fault (demo))".
+  - A switchboard outage counts as "no faults", never as an outage of its own.
+- **Verifier independence is recorded.** The router keeps which provider answered each purpose. The report's `verification.narrative_check` lists the writers, the judges and whether they differ. When they do not (the other provider was unavailable), a limitation says the check was not independent.
+- **The report has a `data_quality` section.** It covers each dataset used as evidence, and each republication it was cross-checked against, with:
+  - every relevant check, with severity and count;
+  - the markers actually present in the values used, with the source's own meaning and their treatment (nulled, excluded from calculations).
+  - A dataset used both ways (evidence for one sector, cross-check for another) lists every series it was relied on for.
+  - Cross-checks that were refused (an identity mismatch, or blocking errors on either side) are recorded and shown as "not comparable", never as agreement, and the broken dataset stays in the panel with its errors.
+  - Marker meanings are the ones the fetched source states (a workbook's own legend), falling back to the reviewed manifest. A disagreement between them is flagged as `LEGEND_CHANGED`.
+  - The UI shows severity with an icon and a word, never colour alone.
+- **Association findings carry an "Exploratory association" tag** in the UI.
+- **Unidentified rows are named with their classification** (e.g. "Information And Communications (SSIC2005)"). The panel showed that without it, a series used as evidence appeared to be unidentified.
+
+**Verified live,** with Bedrock and SingStat switched off, on the demo question:
+- OpenAI answered every call, with the failed Bedrock calls and the fallbacks recorded.
+- Both SingStat datasets were served from snapshot, with the injected-fault disclosure.
+- The narrative check was recorded and disclosed as not independent.
+- The panel listed four datasets: two as evidence, two as cross-checks.
+

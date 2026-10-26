@@ -11,7 +11,7 @@ from arq.connections import RedisSettings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analyses, health
+from app.api import admin, analyses, health
 from app.api.problems import install_problem_handlers
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -42,6 +42,8 @@ def create_app() -> FastAPI:
     install_problem_handlers(app)
     app.include_router(health.router)
     app.include_router(analyses.router)
+    if settings.enable_fault_injection:
+        app.include_router(admin.router)
     return app
 
 

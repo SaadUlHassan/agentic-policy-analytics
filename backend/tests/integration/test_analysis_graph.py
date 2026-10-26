@@ -214,6 +214,7 @@ async def test_full_run_produces_a_verified_two_platform_report(sessions, databa
         "claims_rejected": 1,
         "narrative_note": None,
         "narrative_removed": [],
+        "narrative_check": {"writers": ["bedrock"], "judges": ["openai"], "independent": True},
     }
     assert report["charts"][0]["series"][0]["points"][-1] == {"period": "2024", "value": 180.3}
     assert any("failed evidence checks" in lim["text"] for lim in report["limitations"])
@@ -889,3 +890,93 @@ async def test_heartbeat_in_flight_during_pause_or_finish_is_not_lost(
             text("SELECT active_ms_used FROM analyses WHERE id = :id"), {"id": analysis_id}
         )
     assert 100_000 <= active_ms < 101_000
+
+
+async def test_a_narrative_checked_by_its_own_writer_is_disclosed_as_not_independent(
+    sessions, database_url, checkpoints
+):
+    analysis_id, intent = await _start(sessions)
+    models = {
+        # The independent judge (OpenAI) is unavailable, so the writer (Bedrock) has to judge itself.
+        "bedrock": ScriptedChatModel(replies=[*_happy_path_script(), ALL_SUPPORTED]),
+        "openai": ScriptedChatModel(replies=[TimeoutError(), TimeoutError()]),
+    }
+
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models=models,
+    )
+
+    assert status == "completed"
+    async with sessions() as session:
+        report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+    assert report["verification"]["narrative_check"] == {
+        "writers": ["bedrock"],
+        "judges": ["bedrock"],
+        "independent": False,
+    }
+    assert any("check was not independent" in item["text"] for item in report["limitations"])
+
+
+async def test_report_lists_what_was_checked_on_each_dataset(sessions, database_url, checkpoints):
+    analysis_id, intent = await _start(sessions)
+    models = {
+        "bedrock": ScriptedChatModel(replies=_happy_path_script()),
+        "openai": ScriptedChatModel(replies=[ALL_SUPPORTED]),
+    }
+    await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models=models,
+    )
+    async with sessions() as session:
+        report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis_id))
+
+    panel = {d["dataset_id"]: d for d in report["data_quality"]}
+    assert panel["M182841"]["role"] == "evidence" and panel["M182841"]["series"] == [EMPLOYMENT]
+    assert panel[VACANCIES_DS]["role"] == "evidence"
+    # The mirror of M182841 was only used to cross-check it.
+    assert panel["d_d2518fed6cc2014f0cd061b4570a9592"]["role"] == "cross-check"
+    codes = {c["code"] for c in panel["M182841"]["checks"]}
+    assert "SERVED_FROM_SNAPSHOT" in codes
+    for dataset in panel.values():
+        for marker in dataset["markers"]:
+            assert marker["meaning"] and marker["treatment"].startswith("set to null")
+
+
+async def test_fallback_events_say_the_outage_was_injected(sessions, database_url, checkpoints, redis_client):
+    from app.core.faults import Faults
+
+    analysis_id, intent = await _start(sessions)
+    await Faults(redis_client, enabled=True).switch_on("llm:bedrock")
+    models = {"openai": ScriptedChatModel(replies=[*_happy_path_script(), ALL_SUPPORTED])}
+
+    status = await execute(
+        sessions,
+        redis_client,
+        _settings(database_url, enable_fault_injection=True),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models=models,
+    )
+
+    assert status == "completed"
+    fallbacks = [e for e in await _events(sessions, analysis_id) if e["type"] == "provider_fallback"]
+    # Including those after the circuit opened: the cause it remembers is the injected fault.
+    assert fallbacks and all(
+        e["title"] == "bedrock switched off (injected fault (demo)); answered by openai" for e in fallbacks
+    )
+    assert all("injected fault (demo)" in e["detail"]["reason"] for e in fallbacks)

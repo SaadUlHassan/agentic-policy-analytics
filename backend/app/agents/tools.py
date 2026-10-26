@@ -146,19 +146,30 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         (ds_a, a), (ds_b, b) = found[0], found[1]
         if a.identity is None or b.identity is None:
             raise RuntimeError("both series must be identified")
-        if reason := same_measure_incompatibility(a.identity, b.identity):
-            return {"verdict": "not comparable", "reason": reason.value}
-        if broken := [
+        broken = [
             f"{d.dataset_id}: {i.code}" for d, s in ((ds_a, a), (ds_b, b)) for i in d.blocking_issues(s)
-        ]:
-            # Agreement with unusable evidence would be false reassurance.
+        ]
+        if (mismatch := same_measure_incompatibility(a.identity, b.identity)) or broken:
+            # Recorded, not dropped: a cross-check that could not be made is itself a finding, and
+            # agreement with unusable evidence would be false reassurance.
+            reason = mismatch.value if mismatch else "blocking quality errors: " + "; ".join(broken)
+            rejected = ConsistencyCheck(
+                series_a=series_key,
+                artifact_a=ds_a.artifact_id,
+                series_b=other_series_key,
+                artifact_b=ds_b.artifact_id,
+                periods=[],
+                mismatches=[],
+                not_comparable=reason,
+            )
+            ctx.evidence.consistency.append(rejected)
             await ctx.writer.emit(
                 "extraction",
                 "consistency_check",
-                "not comparable",
-                {"series_a": series_key, "series_b": other_series_key, "blocking_issues": broken},
+                rejected.verdict,
+                {"series_a": series_key, "series_b": other_series_key, "not_comparable": reason},
             )
-            return {"verdict": "not comparable", "reason": "blocking quality errors: " + "; ".join(broken)}
+            return {"verdict": "not comparable", "reason": reason}
         allowed = tolerance(ctx.catalog.get(ds_a.dataset_id), ctx.catalog.get(ds_b.dataset_id))
         compared, mismatches = compare(a, b, plan_window(plan, a.identity.frequency), allowed)
         check = ConsistencyCheck(

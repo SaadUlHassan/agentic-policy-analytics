@@ -106,3 +106,43 @@ describe("splitChart", () => {
     expect(parts.every((p) => p.series.length <= SERIES_COLORS.length)).toBe(true);
   });
 });
+
+describe("verifier independence", () => {
+  it("says when the narrative was checked by the provider that wrote it", () => {
+    const same = { ...report, verification: { ...report.verification, narrative_check: { writers: ["bedrock"], judges: ["bedrock"], independent: false } } };
+    render(<ReportView report={same} />);
+    expect(screen.getByText(/checked by the same provider that wrote it \(bedrock\): not an independent check/)).toBeInTheDocument();
+  });
+
+  it("marks association findings as exploratory", () => {
+    const withAssociation = {
+      ...report,
+      findings: [...report.findings, { id: "k2", kind: "association", text: "Vacancies and hiring tended to be higher together.", citations: [] }],
+    };
+    render(<ReportView report={withAssociation} />);
+    expect(screen.getByText("Exploratory association")).toBeInTheDocument();
+  });
+});
+
+describe("cross-platform checks", () => {
+  it("never shows a refused cross-check as agreement", () => {
+    const refused = {
+      ...report,
+      consistency_checks: [
+        {
+          series: ["a", "b"],
+          verdict: "not comparable (blocking quality errors: mrsd_3_qtly_emp_chg_by_ind: UNIT_MISMATCH)",
+          comparable: false,
+          periods_compared: 0,
+          mismatches: [],
+          citations: [],
+        },
+      ],
+    };
+    render(<ReportView report={refused} />);
+    const section = screen.getByRole("region", { name: "Cross-platform checks" });
+    expect(within(section).getByText(/not comparable \(blocking quality errors/)).toBeInTheDocument();
+    expect(section.textContent).not.toMatch(/✓|over 0 periods/);
+  });
+});
+

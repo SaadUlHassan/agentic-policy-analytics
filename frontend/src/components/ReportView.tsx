@@ -1,3 +1,4 @@
+import { DataQualityPanel } from "@/components/DataQualityPanel";
 import { SeriesChart, splitChart } from "@/components/SeriesChart";
 import type { Citation, Report } from "@/lib/types";
 
@@ -48,6 +49,9 @@ export function ReportView({ report }: { report: Report }) {
           <ol className="flex flex-col gap-2">
             {report.findings.map((f) => (
               <li key={f.id} className="rounded-lg border border-border bg-surface p-3 text-sm">
+                {f.kind === "association" && (
+                  <span className="mr-2 rounded border border-border px-1 text-xs text-ink-2">Exploratory association</span>
+                )}
                 {f.text}
                 {f.citations.map((c) => (
                   <CitationChip key={c} id={c} />
@@ -59,6 +63,10 @@ export function ReportView({ report }: { report: Report }) {
         <p className="mt-2 text-xs text-ink-3">
           {v.claims_verified} of {v.claims_drafted} drafted findings passed evidence checks
           {v.claims_rejected > 0 && `; ${v.claims_rejected} were removed`}.
+          {v.narrative_check &&
+            (v.narrative_check.independent
+              ? ` Narrative checked independently (written by ${v.narrative_check.writers.join(", ")}, checked by ${v.narrative_check.judges.join(", ")}).`
+              : ` Narrative checked by the same provider that wrote it (${v.narrative_check.writers.join(", ")}): not an independent check.`)}
         </p>
       </section>
 
@@ -75,21 +83,26 @@ export function ReportView({ report }: { report: Report }) {
         <section aria-label="Cross-platform checks">
           <h3 className="mb-2 text-base font-semibold">Cross-platform consistency</h3>
           <ul className="flex flex-col gap-1 text-sm">
-            {report.consistency_checks.map((c) => (
-              <li key={c.series.join("|")}>
-                <span className={c.mismatches.length ? "text-warning" : "text-good"} aria-hidden>
-                  {c.mismatches.length ? "! " : "✓ "}
-                </span>
-                {c.verdict} over {c.periods_compared} periods
-                {c.citations.map((id) => (
-                  <CitationChip key={id} id={id} />
-                ))}
-                <span className="block text-xs text-ink-3">Same originating agency: this confirms publication, not independent corroboration.</span>
-              </li>
-            ))}
+            {report.consistency_checks.map((c) => {
+              const agreed = c.comparable !== false && c.mismatches.length === 0;
+              return (
+                <li key={c.series.join("|")}>
+                  <span className={agreed ? "text-good" : "text-warning"} aria-hidden>
+                    {agreed ? "✓ " : "! "}
+                  </span>
+                  {c.comparable === false ? c.verdict : `${c.verdict} over ${c.periods_compared} periods`}
+                  {c.citations.map((id) => (
+                    <CitationChip key={id} id={id} />
+                  ))}
+                  <span className="block text-xs text-ink-3">Same originating agency: this confirms publication, not independent corroboration.</span>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
+
+      <DataQualityPanel datasets={report.data_quality ?? []} />
 
       {report.limitations.length > 0 && (
         <section aria-label="Limitations">

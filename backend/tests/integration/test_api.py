@@ -177,3 +177,42 @@ async def test_cancel_running_is_a_request(client, sessions):
         "cancel_requested": True,
     }
     assert client.get(f"/api/analyses/{analysis_id}").json()["cancel_requested"] is True
+
+
+def _app_with(monkeypatch, enabled: bool) -> TestClient:
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("ENABLE_FAULT_INJECTION", "true" if enabled else "false")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/15")
+    get_settings.cache_clear()
+    try:
+        return TestClient(create_app())
+    finally:
+        get_settings.cache_clear()
+
+
+def test_fault_switches_exist_only_when_injection_is_enabled(monkeypatch):
+    with _app_with(monkeypatch, enabled=False) as off:
+        assert off.get("/api/admin/faults").status_code == 404
+
+    with _app_with(monkeypatch, enabled=True) as on:
+        on.delete("/api/admin/faults")
+        switched = on.put("/api/admin/faults/llm:bedrock", json={"ttl_s": 60})
+        assert switched.status_code == 200 and switched.json()["expires_in_s"] == 60
+        listed = on.get("/api/admin/faults").json()
+        assert [f["name"] for f in listed["active"]] == ["llm:bedrock"]
+        assert "source:singstat" in listed["available"]
+        unknown = on.put("/api/admin/faults/llm:anthropic")
+        assert unknown.status_code == 404 and unknown.json()["code"] == "UNKNOWN_FAULT"
+        assert on.put("/api/admin/faults/llm:openai", json={"ttl_s": 99999}).status_code == 422
+        assert on.delete("/api/admin/faults").json() == {"active": []}
+        assert on.get("/api/admin/faults").json()["active"] == []
+
+
+def test_production_settings_refuse_fault_injection():
+    import pydantic
+
+    from app.core.config import Settings
+
+    with pytest.raises(pydantic.ValidationError):
+        Settings(_env_file=None, app_env="prod", enable_fault_injection=True)

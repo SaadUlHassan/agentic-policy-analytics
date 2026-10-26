@@ -134,3 +134,17 @@ async def test_worker_health_check_reads_the_arq_health_key(redis_client, monkey
     assert await health.main() == 1, "no health record: the worker is not running"
     await redis_client.set(default_queue_name + health_check_key_suffix, "j_complete=0", ex=16)
     assert await health.main() == 0
+
+
+async def test_fault_switches_are_shared_through_redis_and_expire(redis_client):
+    from app.core.faults import Faults
+
+    board = Faults(redis_client, enabled=True)
+    await board.switch_on("llm:bedrock", ttl_s=30)
+
+    assert await Faults(redis_client, enabled=True).active("llm:bedrock"), "another process sees it"
+    assert not await Faults(redis_client, enabled=False).active("llm:bedrock"), "off unless enabled"
+    status = await board.status()
+    assert list(status) == ["llm:bedrock"] and 0 < status["llm:bedrock"] <= 30
+    await board.switch_off()
+    assert await board.status() == {}
