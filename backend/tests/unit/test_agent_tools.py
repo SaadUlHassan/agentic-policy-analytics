@@ -15,6 +15,7 @@ from app.connectors import singstat
 from app.connectors.catalog import get_catalog
 from app.connectors.http import Fetcher, SnapshotStore, get_snapshot_store
 from app.data.taxonomy import get_taxonomy
+from app.grounding.checks import verify_claim
 
 PLAN = ResearchPlan(
     intent="ICT",
@@ -287,3 +288,220 @@ async def test_a_mirror_with_blocking_errors_is_not_reported_consistent():
     assert "consistent" not in reply and ctx.evidence.consistency == []
     events = [d for t, _, d in ctx.writer.events if t == "consistency_check"]
     assert events and events[-1]["blocking_issues"]
+
+
+async def test_analytics_agent_can_correlate_the_named_pair_and_state_it_as_an_association():
+    ctx = _ctx()
+    plan = PLAN.model_copy(update={"metrics": ["job_vacancies", "employment_change"]})
+    extraction = _tools(extraction_tools(ctx, plan))
+    for dataset_id, key in (("M184071", VACANCIES), ("M183891", "M183891:1.2.4@SSIC2020")):
+        await extraction["fetch_dataset"].ainvoke({"dataset_id": dataset_id, "rationale": "r"})
+        await extraction["select_series"].ainvoke({"series_key": key, "reason": "fits", "rationale": "r"})
+    tools = _tools(analytics_tools(ctx, plan))
+
+    evidence = await tools["list_evidence"].ainvoke({"rationale": "r"})
+    vacancies = next(e for e in evidence if e.get("series_key") == VACANCIES)
+    suggestions = [s for s in vacancies["suggested_computations"] if s["tool"] == "correlate"]
+    # Listed first under the leading series (vacancies lead employment change).
+    assert vacancies["suggested_computations"][:2] == suggestions
+    assert [(s["other_series_key"], s["lag"]) for s in suggestions] == [
+        ("M183891:1.2.4@SSIC2020", "0"),
+        ("M183891:1.2.4@SSIC2020", "1"),
+    ]
+
+    described = await tools["compute"].ainvoke(
+        {k: v for k, v in suggestions[0].items() if k != "pairs"} | {"rationale": "r"}
+    )
+    field = described["fields"]["pearson_r"]
+    # The model calls it a comparison; an association is defined by its predicate, not its label.
+    reply = await tools["draft_claim"].ainvoke(
+        {
+            "kind": "comparison",
+            "assertions": [
+                {
+                    "predicate": "assoc.positive",
+                    "computation_id": described["computation_id"],
+                    "field": "pearson_r",
+                    "metric": field["metric"],
+                    "series_key": VACANCIES,
+                    "interval_start": "2020-Q1",
+                    "interval_end": "2024-Q4",
+                }
+            ],
+            "rationale": "r",
+        }
+    )
+    assert reply.startswith("VERIFIED") and "exploratory, not evidence of cause" in reply
+    (claim,) = ctx.evidence.verified_claims()
+    assert claim.kind == "association"
+
+
+async def test_a_refused_correlation_is_recorded_as_a_limitation():
+    ctx = _ctx()
+    plan = PLAN.model_copy(update={"metrics": ["job_vacancies", "employment_level"]})
+    extraction = _tools(extraction_tools(ctx, plan))
+    annual_vacancies = "d_01966fdb498fa7fa2863635e25539693"
+    await extraction["fetch_dataset"].ainvoke({"dataset_id": "M182841", "rationale": "r"})
+    await extraction["fetch_dataset"].ainvoke({"dataset_id": annual_vacancies, "rationale": "r"})
+    vac_key = ctx.evidence.dataset(annual_vacancies).find("info_comms")[0].key
+    for key in ("M182841:3.4@SSIC2020", vac_key):
+        await extraction["select_series"].ainvoke({"series_key": key, "reason": "fits", "rationale": "r"})
+    tools = _tools(analytics_tools(ctx, plan))
+
+    evidence = await tools["list_evidence"].ainvoke({"rationale": "r"})
+    suggested = [c for e in evidence for c in e.get("suggested_computations", []) if c["tool"] == "correlate"]
+    assert suggested == [], "no rule pairs these two"
+    (refused,) = [e["correlations_not_allowed"] for e in evidence if "correlations_not_allowed" in e]
+    assert refused[0].startswith("REFERENCE_MISMATCH")
+    assert [t for t, *_ in ctx.writer.events].count("refusal") == 1
+    # Asking anyway gets the same answer, recorded once.
+    reply = await tools["compute"].ainvoke(
+        {
+            "tool": "correlate",
+            "series_key": "M182841:3.4@SSIC2020",
+            "other_series_key": vac_key,
+            "start": "2020",
+            "end": "2024",
+            "rationale": "r",
+        }
+    )
+
+    assert reply.startswith("REFUSED REFERENCE_MISMATCH")
+    (refusal,) = ctx.evidence.refusals
+    assert refusal.code == "REFERENCE_MISMATCH"
+
+
+async def test_repeating_a_computation_reuses_it_without_spending_the_budget():
+    ctx = _ctx()
+    tools_e = _tools(extraction_tools(ctx, PLAN))
+    await tools_e["fetch_dataset"].ainvoke({"dataset_id": "M184071", "rationale": "r"})
+    await tools_e["select_series"].ainvoke({"series_key": VACANCIES, "reason": "fits", "rationale": "r"})
+    tools = _tools(analytics_tools(ctx, PLAN))
+    args = {"tool": "trend", "series_key": VACANCIES, "start": "2020-Q1", "end": "2024-Q4", "rationale": "r"}
+
+    first = await tools["compute"].ainvoke(args)
+    repeats = [await tools["compute"].ainvoke(args) for _ in range(10)]  # more than the round's budget
+
+    assert all(
+        r["computation_id"] == first["computation_id"] and "already computed" in r["note"] for r in repeats
+    )
+    fresh = await tools["compute"].ainvoke({**args, "tool": "change_between"})
+    assert "computation_id" in fresh, "the budget was not used up by repeats"
+
+
+def test_a_refused_correlation_reads_as_a_sentence_about_both_series():
+    from app.agents.evidence import EvidenceStore
+    from app.agents.report import _refusal_text
+    from app.analytics.results import Refusal
+
+    refusal = Refusal(
+        tool="correlate",
+        code="REFERENCE_MISMATCH",
+        detail="both are stocks but observed differently",
+        params={},
+        series_key="a",
+        other_series_key="b",
+    )
+    assert _refusal_text(refusal, EvidenceStore()) == (
+        "a and b were not correlated: REFERENCE_MISMATCH (both are stocks but observed differently)"
+    )
+
+
+async def _selected(dataset_ids: list[str], metrics: list[str], start_year: int = 2020, end_year: int = 2024):
+    ctx = _ctx()
+    plan = PLAN.model_copy(update={"metrics": metrics, "start_year": start_year, "end_year": end_year})
+    extraction = _tools(extraction_tools(ctx, plan))
+    for dataset_id in dataset_ids:
+        await extraction["fetch_dataset"].ainvoke({"dataset_id": dataset_id, "rationale": "r"})
+        key = ctx.evidence.dataset(dataset_id).find("info_comms")[0].key
+        selected = await extraction["select_series"].ainvoke(
+            {"series_key": key, "reason": "fits", "rationale": "r"}
+        )
+        assert selected.startswith("SELECTED"), selected
+    return ctx, plan, _tools(analytics_tools(ctx, plan))
+
+
+async def test_the_same_pair_refused_in_reverse_order_is_recorded_once():
+    annual_vacancies = "d_01966fdb498fa7fa2863635e25539693"
+    ctx, _, tools = await _selected(["M182841", annual_vacancies], ["employment_level", "job_vacancies"])
+    await tools["list_evidence"].ainvoke({"rationale": "r"})
+    vacancies = ctx.evidence.dataset(annual_vacancies).find("info_comms")[0].key
+
+    reply = await tools["compute"].ainvoke(
+        {
+            "tool": "correlate",
+            "series_key": vacancies,
+            "other_series_key": "M182841:3.4@SSIC2020",
+            "start": "2020",
+            "end": "2024",
+            "rationale": "r",
+        }
+    )
+
+    assert "already recorded" in reply and len(ctx.evidence.refusals) == 1
+
+
+async def test_each_suggested_lag_is_checked_and_an_ineligible_lag_is_reported():
+    # 2022-2024: lag 0 has 12 pairs (eligible), lag 1 has 11 (too few).
+    ctx, _, tools = await _selected(
+        ["M184071", "M183891"], ["job_vacancies", "employment_change"], 2022, 2024
+    )
+
+    evidence = await tools["list_evidence"].ainvoke({"rationale": "r"})
+
+    suggested = [c for e in evidence for c in e.get("suggested_computations", []) if c["tool"] == "correlate"]
+    assert [c["lag"] for c in suggested] == ["0"] and suggested[0]["pairs"].startswith("12 aligned pairs")
+    (refusal,) = ctx.evidence.refusals
+    assert refusal.code == "INSUFFICIENT_PAIRS" and refusal.params["lag"] == "1"
+
+
+async def test_an_earlier_result_is_still_returned_after_the_round_budget_is_spent():
+    ctx, _, tools = await _selected(["M184071"], ["job_vacancies"])
+    periods = [f"{y}-Q{q}" for y in (2020, 2021) for q in range(1, 5)]
+    first = [
+        await tools["compute"].ainvoke(
+            {"tool": "value_at", "series_key": VACANCIES, "period": p, "rationale": "r"}
+        )
+        for p in periods
+    ][0]
+    assert len(ctx.evidence.computations) == 8  # the round's budget
+
+    again = await tools["compute"].ainvoke(
+        {"tool": "value_at", "series_key": VACANCIES, "period": "2020-Q1", "rationale": "r"}
+    )
+    new = await tools["compute"].ainvoke(
+        {"tool": "value_at", "series_key": VACANCIES, "period": "2022-Q1", "rationale": "r"}
+    )
+
+    assert again["computation_id"] == first["computation_id"]
+    assert isinstance(new, str) and new.startswith("BUDGET")
+
+
+async def test_caveats_of_a_retained_association_are_in_the_report():
+    from app.agents.report import build_report
+    from tests.unit.test_correlation import WINDOW, _association
+
+    ctx, plan, tools = await _selected(["M184071", "M183891"], ["job_vacancies", "employment_change"])
+    described = await tools["compute"].ainvoke(
+        {
+            "tool": "correlate",
+            "series_key": VACANCIES,
+            "other_series_key": "M183891:1.2.4@SSIC2020",
+            "start": WINDOW[0],
+            "end": WINDOW[1],
+            "lag": "0",
+            "rationale": "r",
+        }
+    )
+    computation = ctx.evidence.computations[described["computation_id"]]
+    claim = _association(computation)
+    ctx.evidence.claims.append((claim, verify_claim(claim, ctx.evidence.computations)))
+
+    report = build_report(plan, ctx.evidence, narrative=None, question="Are these related?")
+
+    texts = [item["text"] for item in report["limitations"]]
+    assert (
+        "Job vacancies in Information & Communications and employment change in Information & "
+        "Communications: the two series count different populations (establishments vs total employment)"
+    ) in texts
+    assert any("serially dependent" in t for t in texts)

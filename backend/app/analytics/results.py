@@ -28,6 +28,8 @@ class ValueKind(StrEnum):
     MEAN = "mean"
     DIFFERENCE = "difference"
     TOTAL = "total"
+    COEFFICIENT = "coefficient"  # a correlation coefficient: unitless, in [-1, 1]
+    COUNT = "count"
 
 
 class Interpretation(StrEnum):
@@ -72,7 +74,9 @@ class Computation(BaseModel):
     inputs: list[SeriesRef]
     result: dict[str, ResultField]
     interpretation_allowed: Interpretation = Interpretation.DESCRIPTIVE
-    notes: list[str] = []
+    notes: list[str] = []  # how the value was computed
+    # What a reader must know to interpret a finding stated from it; carried into the report.
+    caveats: list[str] = []
 
 
 class RefusalCode(StrEnum):
@@ -86,6 +90,12 @@ class RefusalCode(StrEnum):
     INSUFFICIENT_SPAN = "INSUFFICIENT_SPAN"
     INSUFFICIENT_POINTS = "INSUFFICIENT_POINTS"
     CONSTANT_SERIES = "CONSTANT_SERIES"
+    # correlate (plan §4.5)
+    CLASSIFICATION_MISMATCH = "CLASSIFICATION_MISMATCH"
+    FREQ_MISMATCH = "FREQ_MISMATCH"
+    REFERENCE_MISMATCH = "REFERENCE_MISMATCH"
+    NO_PAIRING_RULE = "NO_PAIRING_RULE"
+    INSUFFICIENT_PAIRS = "INSUFFICIENT_PAIRS"
 
 
 class Refusal(BaseModel):
@@ -94,6 +104,13 @@ class Refusal(BaseModel):
     detail: str
     params: dict[str, Any]
     series_key: str
+    other_series_key: str | None = None  # the second series of a refused correlation
+
+    def identity(self) -> tuple[Any, ...]:
+        """The same request refused for the same reason, whatever order the two series were given
+        in or how the detail is worded."""
+        series = tuple(sorted(k for k in (self.series_key, self.other_series_key) if k))
+        return (self.tool, self.code, series, tuple(sorted(self.params.items())))
 
 
 def fingerprint(tool: str, params: dict[str, Any], inputs: list[SeriesInput], taxonomy_version: str) -> str:

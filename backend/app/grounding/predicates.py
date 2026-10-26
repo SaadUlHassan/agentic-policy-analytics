@@ -21,14 +21,24 @@ class Predicate:
     value_kinds: frozenset[ValueKind]
     claim_kinds: frozenset[ClaimKind]
     sign: Sign
-    # Placeholders: {subject} {value} {t0} {t1}; compare_periods adds {a0} {a1} {b0} {b1}.
+    # Placeholders: {subject} {value} {t0} {t1}; compare_periods adds {a0} {a1} {b0} {b1};
+    # correlate adds {subject_b} {lag_phrase} {measure} {n}.
     template: str
     description: str
+    # Strength rule on |value| (correlations): at least `min_abs`, or below `max_abs`.
+    min_abs: float | None = None
+    max_abs: float | None = None
 
 
 _MEASURED = frozenset({ClaimKind.MEASURED})
 _COMPARISON = frozenset({ClaimKind.COMPARISON, ClaimKind.MEASURED})
 _CHANGE_TOOLS = frozenset({"change_between", "yoy_change"})
+_ASSOCIATION = frozenset({ClaimKind.ASSOCIATION})
+# |r| below this is described as little association, never as positive or negative.
+ASSOCIATION_STRENGTH = 0.3
+_ASSOC_TAIL = (
+    "between {t0} and {t1} ({measure} {value} over {n} quarters; exploratory, not evidence of cause)"
+)
 
 
 def _p(
@@ -39,6 +49,8 @@ def _p(
     sign: Sign,
     template: str,
     description: str,
+    min_abs: float | None = None,
+    max_abs: float | None = None,
 ) -> Predicate:
     return Predicate(
         id=id,
@@ -48,6 +60,8 @@ def _p(
         sign=sign,
         template=template,
         description=description,
+        min_abs=min_abs,
+        max_abs=max_abs,
     )
 
 
@@ -82,6 +96,15 @@ _REGISTRY = [
     _p("period.lower", {"compare_periods"}, {ValueKind.DIFFERENCE}, _COMPARISON, sign="negative",
        template="{subject} averaged {value} less in {b0} to {b1} than in {a0} to {a1}",
        description="a lower average in a later window"),
+    _p("assoc.positive", {"correlate"}, {ValueKind.COEFFICIENT}, _ASSOCIATION, sign="positive",
+       template="{subject} and {subject_b}{lag_phrase} tended to be higher together " + _ASSOC_TAIL,
+       description=f"a positive correlation, |r| >= {ASSOCIATION_STRENGTH}", min_abs=ASSOCIATION_STRENGTH),
+    _p("assoc.negative", {"correlate"}, {ValueKind.COEFFICIENT}, _ASSOCIATION, sign="negative",
+       template="when {subject} was higher, {subject_b}{lag_phrase} tended to be lower " + _ASSOC_TAIL,
+       description=f"a negative correlation, |r| >= {ASSOCIATION_STRENGTH}", min_abs=ASSOCIATION_STRENGTH),
+    _p("assoc.weak", {"correlate"}, {ValueKind.COEFFICIENT}, _ASSOCIATION, sign=None,
+       template="{subject} and {subject_b}{lag_phrase} showed little association " + _ASSOC_TAIL,
+       description=f"a weak correlation, |r| < {ASSOCIATION_STRENGTH}", max_abs=ASSOCIATION_STRENGTH),
 ]
 # fmt: on
 PREDICATES: dict[str, Predicate] = {p.id: p for p in _REGISTRY}

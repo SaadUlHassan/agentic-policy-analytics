@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.agents.evidence import ConsistencyCheck, EvidenceStore
 from app.agents.plan import ResearchPlan
 from app.agents.tools import plan_window
+from app.analytics.results import Refusal
 from app.grounding.checks import check_free_text
 from app.grounding.citations import CitationIndex, EvidenceRef, claim_refs
 from app.grounding.render import DISPLAY_ROUNDING_VERSION, render_claim
@@ -188,11 +189,40 @@ def _charts(plan: ResearchPlan, evidence: EvidenceStore, citations: CitationInde
     ]
 
 
+def _refusal_text(refusal: Refusal, evidence: EvidenceStore) -> str:
+    def name(series_key: str) -> str:
+        found = evidence.find_series(series_key)
+        identity = found[1].identity if found else None
+        return f"{identity.subject()} ({identity.frequency})" if identity else series_key
+
+    if refusal.other_series_key:
+        other = name(refusal.other_series_key)
+        return (
+            f"{name(refusal.series_key)} and {other[:1].lower() + other[1:]} were not correlated: "
+            f"{refusal.code} ({refusal.detail})"
+        )
+    return f"{refusal.tool} on {name(refusal.series_key)} was not computed: {refusal.code} ({refusal.detail})"
+
+
+def _finding_caveats(evidence: EvidenceStore) -> list[dict[str, str]]:
+    """Caveats of the computations behind retained findings (e.g. a correlation between series that
+    count different populations). Added deterministically: the narrative may not mention them."""
+    out: list[dict[str, str]] = []
+    for claim in evidence.verified_claims():
+        for assertion in claim.assertions.values():
+            computation = evidence.computations[assertion.computation_id]
+            names = [i.identity.subject() for i in computation.inputs]
+            subjects = " and ".join([names[0], *(n[:1].lower() + n[1:] for n in names[1:])])
+            for caveat in computation.caveats:
+                item = {"source": "analysis", "text": f"{subjects}: {caveat}"}
+                if item not in out:
+                    out.append(item)
+    return out
+
+
 def _derived_limitations(evidence: EvidenceStore) -> list[dict[str, str]]:
-    out = [
-        {"source": "analysis", "text": f"{r.tool} on {r.series_key} was not computed: {r.code} ({r.detail})"}
-        for r in evidence.refusals
-    ]
+    out = [{"source": "analysis", "text": _refusal_text(r, evidence)} for r in evidence.refusals]
+    out += _finding_caveats(evidence)
     rejected = len(evidence.claims) - len(evidence.verified_claims())
     if rejected:
         out.append(

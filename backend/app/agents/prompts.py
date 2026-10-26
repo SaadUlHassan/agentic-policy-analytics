@@ -67,6 +67,9 @@ How claims work - this is mandatory:
 - Every draft is verified immediately; read the verdict and fix or drop any claim that fails.
 - Flow series (net changes) are summarised with cumulative or compare_periods, never change_between.
 - If a tool refuses (e.g. missing periods), report that as a limitation instead of working around it.
+- When list_evidence offers suggested_correlations, run them with correlate (series_key, other_series_key,
+  start, end, lag) and state the result with an assoc.* predicate on pearson_r. A correlation is
+  exploratory: it never says why two series move together. Do not correlate pairs it does not suggest.
 
 Work efficiently:
 - Summarise a period with one window statistic (change_between, cagr, trend, compare_periods) instead

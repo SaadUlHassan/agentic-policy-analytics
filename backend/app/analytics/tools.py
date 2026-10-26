@@ -11,8 +11,10 @@ from typing import Any
 import numpy as np
 import statsmodels.api as sm
 
+from app.analytics import correlation
 from app.analytics.results import (
     Computation,
+    Interpretation,
     Interval,
     Refusal,
     RefusalCode,
@@ -328,3 +330,101 @@ class Toolkit:
             ),
         }
         return self._computation("compare_periods", params, source, a.periods + b.periods, result)
+
+    def correlate(
+        self,
+        x_source: SeriesInput,
+        x_series: SeriesData,
+        y_source: SeriesInput,
+        y_series: SeriesData,
+        start: str,
+        end: str,
+        lag: str | int = 0,
+    ) -> Computation | Refusal:
+        """Exploratory association between two series over [start, end] under a declared pairing
+        rule (app.analytics.correlation). The series are ordered so the rule's leading series is
+        first; `lag` is how many periods the second series trails it."""
+        params: dict[str, Any] = {"start": start, "end": end, "lag": str(lag)}
+
+        def refuse(code: str, detail: str) -> Refusal:
+            return Refusal(
+                tool="correlate",
+                code=RefusalCode(code),
+                detail=detail,
+                params=params,
+                series_key=x_source.series_key,
+                other_series_key=y_source.series_key,
+            )
+
+        try:
+            lag_n = int(lag)
+            s, e = Period.parse(start), Period.parse(end)
+            if lag_n < 0 or e.ordinal - s.ordinal < lag_n or s.frequency != e.frequency:
+                raise ValueError("lag must be 0 or more and fit inside the window")
+        except ValueError as exc:
+            return refuse("INVALID_WINDOW", str(exc))
+        # Canonical spellings ("01" is lag 1, "2020 1Q" is 2020-Q1): one request, one identity.
+        start, end = str(s), str(e)
+        params.update(start=start, end=end, lag=str(lag_n))
+        if correlation.find_rule(x_source.identity, y_source.identity) is None and correlation.find_rule(
+            y_source.identity, x_source.identity
+        ):
+            x_source, x_series, y_source, y_series = y_source, y_series, x_source, x_series
+        try:
+            rule = correlation.eligibility(x_source.identity, y_source.identity, lag_n)
+            if s.frequency != x_source.identity.frequency:
+                return refuse("INVALID_WINDOW", f"periods must be {x_source.identity.frequency}")
+            aligned = correlation.align(x_series, y_series, rule, lag_n, s, e)
+            pearson, spearman = correlation.coefficients(aligned)
+        except correlation.Ineligible as exc:
+            return refuse(exc.code, exc.detail)
+
+        def field(value: float, kind: ValueKind, unit: str) -> ResultField:
+            return ResultField(
+                value=value,
+                metric=f"{x_source.identity.metric}~{y_source.identity.metric}",
+                value_kind=kind,
+                unit=unit,
+                scale=1,
+                interval=Interval(start=start, end=end),
+            )
+
+        notes = [
+            correlation.EXPLORATORY_NOTE,
+            f"{rule.name}, lag {lag_n}: {rule.lag_meaning[lag_n]}",
+            f"{len(aligned.pairs)} aligned pairs",
+        ]
+        caveats = [
+            "consecutive quarters are serially dependent, so the coefficient overstates how much "
+            "independent evidence there is; it shows co-movement, not cause",
+            *rule.caveats,
+        ]
+        if x_source.identity.population != y_source.identity.population:
+            caveats.append(
+                "the two series count different populations ("
+                f"{x_source.identity.population.replace('_', ' ')} vs "
+                f"{y_source.identity.population.replace('_', ' ')})"
+            )
+        if aligned.skipped:
+            caveats.append(f"quarters left out for missing values: {', '.join(aligned.skipped)}")
+        sources = [x_source, y_source]
+        fp = fingerprint("correlate", params, sources, self.taxonomy_version)
+        refs = [
+            SeriesRef(**x_source.model_dump(), periods_used=[px for px, _ in aligned.pairs]),
+            SeriesRef(**y_source.model_dump(), periods_used=[py for _, py in aligned.pairs]),
+        ]
+        return Computation(
+            id=f"c{fp[:8]}",
+            fingerprint=fp,
+            tool="correlate",
+            params=params,
+            inputs=refs,
+            result={
+                "pearson_r": field(pearson, ValueKind.COEFFICIENT, "correlation"),
+                "spearman_rho": field(spearman, ValueKind.COEFFICIENT, "correlation"),
+                "pairs": field(float(len(aligned.pairs)), ValueKind.COUNT, "pairs"),
+            },
+            interpretation_allowed=Interpretation.EXPLORATORY_ASSOCIATION,
+            notes=notes,
+            caveats=caveats,
+        )
