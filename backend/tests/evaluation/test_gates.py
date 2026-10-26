@@ -183,3 +183,21 @@ def test_freshness_ignores_cross_platform_float_noise_but_not_real_changes():
         changed = copy.deepcopy(stored)
         changed["computations"][path[0]]["fields"][path[1]][path[2]] = value
         assert not script.matches(changed, fresh), path
+
+
+async def test_a_verdict_that_accepts_a_bad_claim_is_not_detection(monkeypatch, series):
+    from app.evaluation import adversarial
+
+    original = adversarial.verify_claim
+
+    def accepts_anyway(claim, computations):
+        # A verifier regression: the checks still fail, but the claim is let through.
+        return original(claim, computations).model_copy(update={"passed": True})
+
+    monkeypatch.setattr(adversarial, "verify_claim", accepts_anyway)
+    cases, computations = build_cases(series)
+    summary = summarise(evaluate(cases, computations))
+
+    claim_categories = {c.category for c in cases if not c.valid and c.claim is not None}
+    assert all(summary["categories"][c]["recall"] == 0 for c in claim_categories)
+    assert not summary["gate_passed"]

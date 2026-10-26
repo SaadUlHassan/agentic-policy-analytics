@@ -425,7 +425,9 @@ def evaluate(cases: list[Case], computations: dict[str, Computation]) -> list[Ou
 
 
 def _detected(outcome: Outcome) -> bool:
-    return EXPECTED_CHECK[outcome.case.category] in outcome.failed_checks
+    """The claim was rejected, and by the rule it breaks: a verdict that accepts a claim while listing
+    failed checks is a verifier fault, not a detection."""
+    return outcome.rejected and EXPECTED_CHECK[outcome.case.category] in outcome.failed_checks
 
 
 def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
