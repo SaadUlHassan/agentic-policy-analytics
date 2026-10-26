@@ -1068,3 +1068,30 @@ All of the following was verified live: the example query on Bedrock primary, on
   - Hovering or focusing a finding highlights the chart series it rests on. Findings record the series keys behind their computations, because one citation can cover several sectors of a dataset; older reports fall back to citations.
   - Tables scroll horizontally on narrow screens.
 
+## M3 outcomes: deterministic evaluation gates (F1)
+
+**Delivered:** the golden set, independently computed expected values, and the computation-accuracy, refusal-correctness and adversarial-verifier gates. They run as tests in CI and as `make eval`, and the results go to `eval/results/deterministic.{json,md}`.
+
+**Decisions taken while building:**
+- **Expected values share no code with the application.** `eval/compute_expected.py` reads the raw snapshot payloads through the manifest and parses them itself. It computes every statistic from its definition: closed-form OLS slope, Pearson's r, and Spearman's ρ with averaged tied ranks. It uses no scipy, statsmodels or pandas, and none of the application's parsers or tools.
+  - A test enforces this independence by inspecting the script's imports.
+  - `expected.json` is committed for human review, and a gate fails if it is stale for the current snapshots.
+- **The golden set** (`eval/golden/queries.yaml`) contains:
+  - 12 computations: ICT employment change, CAGR, trend and YoY; quarterly employment change total and period comparison; vacancies change for the sector and the IT subsector; vacancy trend and CAGR; the named correlation pair at lag 0 and lag 1;
+  - 4 refusals: `REFERENCE_MISMATCH`, `INSUFFICIENT_PAIRS` and two `NOT_A_LEVEL`;
+  - 12 queries for the live runs (F2).
+  - No recruitment-rate computation is included, because M184021 has no identified ICT series in the snapshots.
+- **Tolerances** follow §8.3: exact for integer arithmetic on source values, a relative 1e-9 for closed-form formulas, and 1e-6 for estimators.
+- **The adversarial suite** has 25 valid controls (20 claims and 5 narrative sentences) and 44 corrupted cases in 17 categories, all bound to real computations.
+  - Detection must come from the rule each corruption breaks: e.g. a wrong direction must fail `sign_rule`, not some other check.
+  - This caught a bug in the suite itself during development: every case first failed `resolution`, controls included, which would have reported 100% recall with an 80% false-positive rate.
+  - Unsupported narrative additions with no numbers or causal words need the LLM judge, so they are measured in the live evaluation.
+- **The golden check found an error in a test fixture.** `ICT_EMPLOYMENT` in the analytics unit tests was labelled as real M182841 values, but four of its six years differed from the published figures (e.g. 2022 was 176.4; SingStat publishes 187.8). It now holds the published values.
+
+**Results (snapshots of 25 Oct 2026):**
+- computation accuracy 30/30 fields within tolerance;
+- refusal correctness 4/4;
+- adversarial recall 100% in every category, precision 100%, false-positive rate 0%.
+
+**Next (F2):** live golden runs on both providers, the consistency runs, the provider-resilience scenarios, the qualitative judge category, and a human relevance review sheet.
+

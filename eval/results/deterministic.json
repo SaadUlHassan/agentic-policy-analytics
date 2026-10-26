@@ -1,0 +1,431 @@
+{
+  "generated_at": "2026-10-26T21:39:26+00:00",
+  "snapshots_captured_at": "2026-10-25T16:31:21+00:00",
+  "gates": {
+    "expectations_current": true,
+    "computation_accuracy": true,
+    "refusal_correctness": true,
+    "adversarial_recall": true,
+    "adversarial_false_positives": true
+  },
+  "passed": true,
+  "computation_accuracy": [
+    {
+      "computation": "C01",
+      "field": "abs_change",
+      "expected": 22.700000000000017,
+      "actual": 22.700000000000017,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C01",
+      "field": "end_value",
+      "expected": 180.3,
+      "actual": 180.3,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C01",
+      "field": "pct_change",
+      "expected": 14.403553299492398,
+      "actual": 14.403553299492398,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C01",
+      "field": "start_value",
+      "expected": 157.6,
+      "actual": 157.6,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C02",
+      "field": "cagr_pct",
+      "expected": 3.4212728201513887,
+      "actual": 3.4212728201513887,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C03",
+      "field": "slope",
+      "expected": 5.440000000000003,
+      "actual": 5.439999999999988,
+      "tolerance": "estimator",
+      "ok": true
+    },
+    {
+      "computation": "C04",
+      "field": "abs_change",
+      "expected": -5.900000000000006,
+      "actual": -5.900000000000006,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C04",
+      "field": "end_value",
+      "expected": 181.9,
+      "actual": 181.9,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C04",
+      "field": "pct_change",
+      "expected": -3.141640042598512,
+      "actual": -3.141640042598512,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C04",
+      "field": "start_value",
+      "expected": 187.8,
+      "actual": 187.8,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C05",
+      "field": "total",
+      "expected": 26800.0,
+      "actual": 26800.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C06",
+      "field": "difference",
+      "expected": -2600.0,
+      "actual": -2600.0,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C06",
+      "field": "mean_a",
+      "expected": 2640.0,
+      "actual": 2640.0,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C06",
+      "field": "mean_b",
+      "expected": 40.0,
+      "actual": 40.0,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C07",
+      "field": "abs_change",
+      "expected": 1000.0,
+      "actual": 1000.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C07",
+      "field": "end_value",
+      "expected": 5600.0,
+      "actual": 5600.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C07",
+      "field": "pct_change",
+      "expected": 21.73913043478261,
+      "actual": 21.73913043478261,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C07",
+      "field": "start_value",
+      "expected": 4600.0,
+      "actual": 4600.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C08",
+      "field": "abs_change",
+      "expected": 1100.0,
+      "actual": 1100.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C08",
+      "field": "end_value",
+      "expected": 5100.0,
+      "actual": 5100.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C08",
+      "field": "pct_change",
+      "expected": 27.500000000000004,
+      "actual": 27.500000000000004,
+      "tolerance": "closed_form",
+      "ok": true
+    },
+    {
+      "computation": "C08",
+      "field": "start_value",
+      "expected": 4000.0,
+      "actual": 4000.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C09",
+      "field": "slope",
+      "expected": 160.6015037593985,
+      "actual": 160.60150375939975,
+      "tolerance": "estimator",
+      "ok": true
+    },
+    {
+      "computation": "C10",
+      "field": "pairs",
+      "expected": 20.0,
+      "actual": 20.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C10",
+      "field": "pearson_r",
+      "expected": 0.46771700851419795,
+      "actual": 0.4677170085141979,
+      "tolerance": "estimator",
+      "ok": true
+    },
+    {
+      "computation": "C10",
+      "field": "spearman_rho",
+      "expected": 0.47120816284266964,
+      "actual": 0.47120816284266953,
+      "tolerance": "estimator",
+      "ok": true
+    },
+    {
+      "computation": "C11",
+      "field": "pairs",
+      "expected": 19.0,
+      "actual": 19.0,
+      "tolerance": "exact",
+      "ok": true
+    },
+    {
+      "computation": "C11",
+      "field": "pearson_r",
+      "expected": 0.3598075606260415,
+      "actual": 0.3598075606260416,
+      "tolerance": "estimator",
+      "ok": true
+    },
+    {
+      "computation": "C11",
+      "field": "spearman_rho",
+      "expected": 0.3104962969613563,
+      "actual": 0.3104962969613564,
+      "tolerance": "estimator",
+      "ok": true
+    },
+    {
+      "computation": "C12",
+      "field": "cagr_pct",
+      "expected": 4.228215989817086,
+      "actual": 4.228215989817086,
+      "tolerance": "closed_form",
+      "ok": true
+    }
+  ],
+  "refusal_correctness": [
+    {
+      "refusal": "R01",
+      "expected_code": "REFERENCE_MISMATCH",
+      "actual": "REFERENCE_MISMATCH",
+      "ok": true
+    },
+    {
+      "refusal": "R02",
+      "expected_code": "INSUFFICIENT_PAIRS",
+      "actual": "INSUFFICIENT_PAIRS",
+      "ok": true
+    },
+    {
+      "refusal": "R03",
+      "expected_code": "NOT_A_LEVEL",
+      "actual": "NOT_A_LEVEL",
+      "ok": true
+    },
+    {
+      "refusal": "R04",
+      "expected_code": "NOT_A_LEVEL",
+      "actual": "NOT_A_LEVEL",
+      "ok": true
+    }
+  ],
+  "adversarial": {
+    "controls": 25,
+    "corrupted": 44,
+    "categories": {
+      "association_from_descriptive": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "kind_allowed"
+        ]
+      },
+      "association_strength": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "strength_rule"
+        ]
+      },
+      "causal_hedged": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "no_causal_language",
+          "safe_prose"
+        ]
+      },
+      "causal_unhedged": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "no_causal_language",
+          "safe_prose"
+        ]
+      },
+      "fabricated_literal": {
+        "cases": 3,
+        "detected": 3,
+        "recall": 1.0,
+        "checks_fired": [
+          "no_free_numbers",
+          "safe_prose"
+        ]
+      },
+      "level_as_change": {
+        "cases": 3,
+        "detected": 3,
+        "recall": 1.0,
+        "checks_fired": [
+          "predicate_fit"
+        ]
+      },
+      "longer_interval": {
+        "cases": 3,
+        "detected": 3,
+        "recall": 1.0,
+        "checks_fired": [
+          "interval_equality"
+        ]
+      },
+      "narrative_causal": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "no_causal_language"
+        ]
+      },
+      "narrative_fabricated_number": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "no_free_numbers"
+        ]
+      },
+      "parent_child_swap": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "identity_equality"
+        ]
+      },
+      "recommendation_with_figures": {
+        "cases": 1,
+        "detected": 1,
+        "recall": 1.0,
+        "checks_fired": [
+          "kind_allowed",
+          "recommendation_has_no_figures"
+        ]
+      },
+      "shorter_interval": {
+        "cases": 3,
+        "detected": 3,
+        "recall": 1.0,
+        "checks_fired": [
+          "interval_equality"
+        ]
+      },
+      "tampered_lineage": {
+        "cases": 2,
+        "detected": 2,
+        "recall": 1.0,
+        "checks_fired": [
+          "identity_equality"
+        ]
+      },
+      "wrong_computation_ref": {
+        "cases": 3,
+        "detected": 3,
+        "recall": 1.0,
+        "checks_fired": [
+          "resolution"
+        ]
+      },
+      "wrong_direction": {
+        "cases": 5,
+        "detected": 5,
+        "recall": 1.0,
+        "checks_fired": [
+          "sign_rule"
+        ]
+      },
+      "wrong_metric": {
+        "cases": 3,
+        "detected": 3,
+        "recall": 1.0,
+        "checks_fired": [
+          "metric_equality"
+        ]
+      },
+      "wrong_unit_or_field": {
+        "cases": 4,
+        "detected": 4,
+        "recall": 1.0,
+        "checks_fired": [
+          "predicate_fit"
+        ]
+      }
+    },
+    "recall": 1.0,
+    "precision": 1.0,
+    "false_positive_rate": 0.0,
+    "false_positives": [],
+    "gate_passed": true
+  }
+}

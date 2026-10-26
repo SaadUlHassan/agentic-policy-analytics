@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down reset logs ps smoke test test-backend test-frontend lint fmt typecheck probe snapshots
+.PHONY: help up down reset logs ps smoke test test-backend test-frontend lint fmt typecheck eval eval-expected probe snapshots
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -32,15 +32,21 @@ test-frontend:
 	cd frontend && npm test
 
 lint: ## Lint and format-check everything
-	cd backend && uv run ruff check . ../scripts && uv run ruff format --check . ../scripts
+	cd backend && uv run ruff check . ../scripts ../eval && uv run ruff format --check . ../scripts ../eval
 	cd frontend && npm run lint
 
 fmt: ## Auto-format backend code
-	cd backend && uv run ruff check --fix . ../scripts && uv run ruff format . ../scripts
+	cd backend && uv run ruff check --fix . ../scripts ../eval && uv run ruff format . ../scripts ../eval
 
 typecheck: ## Static type checks
 	cd backend && uv run mypy app
 	cd frontend && npm run typecheck
+
+eval: ## Deterministic evaluation gates (golden computations, refusals, adversarial suite) -> eval/results
+	cd backend && uv run python -m app.evaluation
+
+eval-expected: ## Recompute the golden expected values independently from the raw snapshots
+	cd backend && uv run python ../eval/compute_expected.py
 
 probe: ## LLM capability probe of the configured models (credentials and model IDs from .env)
 	cd backend && uv run python ../scripts/probe_llm.py
