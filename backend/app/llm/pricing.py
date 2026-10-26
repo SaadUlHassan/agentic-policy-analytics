@@ -1,8 +1,9 @@
 """LLM usage and cost per analysis, from the call ledger (plan §4.7).
 
 Prices are configuration, never guesses: LLM_PRICES maps a model id to USD per million input and
-output tokens. When any model used is unpriced, or a call did not report its token usage, the cost is
-reported as unknown rather than as a partial total that would look complete.
+output tokens. Failed calls count too: a reply that was rejected was still generated. When any model
+used is unpriced, or any call's token usage is unknown, the cost is reported as unknown rather than as
+a partial total that would look complete.
 """
 
 from __future__ import annotations
@@ -17,15 +18,15 @@ from app.db.models import LLMCall
 def usage_summary(calls: Iterable[LLMCall], prices: Mapping[str, tuple[float, float]]) -> dict[str, Any]:
     calls = list(calls)
     ok = [c for c in calls if c.ok]
-    tokens_in = sum(c.input_tokens or 0 for c in ok)
-    tokens_out = sum(c.output_tokens or 0 for c in ok)
-    unpriced = sorted({c.model for c in ok if c.model not in prices})
-    unmetered = sum(c.input_tokens is None or c.output_tokens is None for c in ok)
+    tokens_in = sum(c.input_tokens or 0 for c in calls)
+    tokens_out = sum(c.output_tokens or 0 for c in calls)
+    unpriced = sorted({c.model for c in calls if c.model not in prices})
+    unmetered = sum(c.input_tokens is None or c.output_tokens is None for c in calls)
     cost = None
-    if ok and not unpriced and not unmetered:
+    if calls and not unpriced and not unmetered:
         cost = sum(
             ((c.input_tokens or 0) * prices[c.model][0] + (c.output_tokens or 0) * prices[c.model][1]) / 1e6
-            for c in ok
+            for c in calls
         )
     return {
         "llm_calls": len(calls),

@@ -125,3 +125,31 @@ async def test_structured_repair_shares_the_original_time_budget():
     plan = await router.structured(Plan, QUESTION, agent="coordinator", purpose="plan")
     assert len(router.models["bedrock"].calls) == 1  # no repair attempt after the budget was spent
     assert plan.start_year == 2021
+
+
+async def test_a_rejected_structured_reply_is_metered_and_a_repair_counts_both_replies():
+    usage = {"input_tokens": 1000, "output_tokens": 500, "total_tokens": 1500}
+    bad = tool_call("Plan", {"sector": "info_comms"}).model_copy(update={"usage_metadata": usage})
+    good = tool_call("Plan", {"sector": "info_comms", "start_year": 2020}).model_copy(
+        update={"usage_metadata": usage}
+    )
+    # Bedrock: rejected, rejected (fails over). OpenAI: rejected, then repaired.
+    router, records = _router([bad, bad], [bad, good])
+
+    await router.structured(Plan, QUESTION, agent="coordinator", purpose="plan")
+
+    failed, answered = records
+    assert not failed.ok and "StructuredOutputError" in failed.error
+    assert (failed.input_tokens, failed.output_tokens) == (2000, 1000), "both rejected replies were generated"
+    assert answered.ok and (answered.input_tokens, answered.output_tokens) == (2000, 1000)
+
+
+async def test_an_injected_fault_is_recorded_as_sending_nothing():
+    from tests.unit.test_faults import Switched
+
+    router, records = _router([], [tool_call("Plan", {"sector": "x", "start_year": 2020})])
+    router.faults = Switched("llm:bedrock")
+
+    await router.structured(Plan, QUESTION, agent="coordinator", purpose="plan")
+
+    assert (records[0].input_tokens, records[0].output_tokens) == (0, 0)

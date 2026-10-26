@@ -1058,7 +1058,9 @@ All of the following was verified live: the example query on Bedrock primary, on
   - Drafts are never exportable, because only verified findings reach the report. Exporting before a report exists is a `409 REPORT_NOT_AVAILABLE`.
   - The report's selected series now record their `artifact_id`. Older reports resolve the version their citation pins. When several versions are stored and none is pinned, nothing is exported rather than a guess.
   - The JSON bundle shows each dataset as this analysis fetched it (its own retrieval time, snapshot use and raw hashes), using the same fetch-record overlay as resume.
-- **Cost is shown only when every model used has a configured price and every call reported its token usage** (`LLM_PRICES`, USD per million input and output tokens). Otherwise the UI says "cost not configured" rather than showing a partial total; prices are configuration, never guesses. Calls, tokens, LLM latency, active time and the provider mix are always shown.
+- **Cost counts every call, failed ones included, and is shown only when every model used has a configured price and every call's token usage is known.** A structured-output failure is metered from its rejected replies (they were generated), and a repaired answer counts both replies. An injected fault sent nothing, so it is recorded as zero. A failure with unknown usage, such as a timeout, makes the cost unknown.
+  - Prices come from `LLM_PRICES` (USD per million input and output tokens); they are configuration, never guesses. Otherwise the UI says "cost not configured" rather than showing a partial total.
+  - Calls, tokens, LLM latency, active time and the provider mix are always shown.
 - **History** filters by status and pages with the existing keyset cursor ("Load more"). A page requested under an earlier filter is discarded when it arrives.
 - **Charts:**
   - Series can be toggled; at least one stays visible, and colours stay with their series.
