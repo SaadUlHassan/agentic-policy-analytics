@@ -68,7 +68,7 @@ class ActiveClock:
     async def report(self) -> AsyncIterator[int]:
         """Yield the unreported milliseconds; they count as reported if the block completes."""
         async with self._lock:
-            elapsed = int((time.monotonic() - self.started) * 1000)
+            elapsed = round((time.monotonic() - self.started) * 1000)
             yield elapsed - self._reported_ms
             self._reported_ms = elapsed
 
