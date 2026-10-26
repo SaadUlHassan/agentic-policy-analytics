@@ -11,6 +11,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.jobs.checkpoint import ensure_tables, open_pool
+
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql+asyncpg://policy:policy@localhost:5432/policy_test"
 )
@@ -59,3 +61,14 @@ async def sessions(database_url):
         )
     yield async_sessionmaker(engine, expire_on_commit=False)
     await engine.dispose()
+
+
+@pytest.fixture
+async def checkpoints(database_url):
+    pool = open_pool(database_url)
+    await pool.open()
+    await ensure_tables(pool)
+    async with pool.connection() as conn:
+        await conn.execute("TRUNCATE checkpoints, checkpoint_blobs, checkpoint_writes")
+    yield pool
+    await pool.close()

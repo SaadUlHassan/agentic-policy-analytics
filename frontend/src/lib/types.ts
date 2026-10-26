@@ -106,9 +106,13 @@ export type AnalysisSummary = {
   finished_at: string | null;
 };
 
+export type ClarificationQuestion = { question: string; options: string[]; version: number };
+
 export type AnalysisDetail = AnalysisSummary & {
   plan: Plan | null;
   report: Report | null;
   error: { code: string; detail?: string } | null;
+  clarification: ClarificationQuestion | null;
+  cancel_requested: boolean;
   last_event_seq: number;
 };

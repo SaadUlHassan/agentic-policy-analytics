@@ -54,6 +54,7 @@ async def run_react(
                 messages.append(ToolMessage(f"SKIPPED: {stop.stop_reason}", tool_call_id=call["id"]))
                 continue
             calls += 1
+            await ctx.check_cancel()
             # The public reasoning summary travels as a tool argument, so it is visible whatever the
             # provider does with free text (some return their explanation only as private reasoning).
             if rationale := str(args.get("rationale", "")).strip():

@@ -27,6 +27,11 @@ class ResearchPlan(BaseModel):
         default=[], description="Interpretations made, e.g. how a sector was mapped"
     )
     rationale: str = Field(description="Two sentences, shown to the user, explaining this plan")
+    needs_clarification: bool = Field(
+        default=False, description="True only if no sensible default interpretation exists"
+    )
+    clarification_question: str = Field(default="", description="One question for the researcher")
+    clarification_options: list[str] = Field(default=[], description="Two to four concrete answers to offer")
 
 
 class NextAction(BaseModel):

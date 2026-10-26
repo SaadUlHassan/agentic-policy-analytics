@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { lastSeq, mergeEvents, terminalStatus } from "@/lib/events";
+import { lastSeq, liveStatus, mergeEvents, pendingQuestion, terminalStatus } from "@/lib/events";
 import type { AgentEvent } from "@/lib/types";
 
 const ev = (seq: number, type = "rationale", detail: Record<string, unknown> = {}): AgentEvent => ({
@@ -35,5 +35,19 @@ describe("terminalStatus", () => {
     expect(terminalStatus([ev(1, "status", { status: "running" }), ev(2, "status", { status: "completed" })])).toBe(
       "completed",
     );
+  });
+});
+
+describe("clarification state", () => {
+  const question = { question: "Which sector?", options: ["ICT"], version: 1 };
+
+  it("treats the latest question as pending until anything else happens", () => {
+    const paused = [ev(1, "status", { status: "running" }), ev(2, "clarification", question)];
+    expect(pendingQuestion(paused)).toEqual(question);
+    expect(liveStatus(paused)).toBe("awaiting_input");
+
+    const answered = [...paused, ev(3, "status", { status: "queued" })];
+    expect(pendingQuestion(answered)).toBeNull();
+    expect(liveStatus(answered)).toBe("queued");
   });
 });

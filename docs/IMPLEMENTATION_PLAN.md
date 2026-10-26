@@ -916,3 +916,42 @@ All of the following was verified live: the example query on Bedrock primary, on
 **Known gaps carried into M2**
 - **The reconciler is not implemented yet** (lease expiry, re-dispatch of unacknowledged intents). An analysis whose worker is replaced mid-run stays `running`, as observed once during a stack rebuild.
 - **The epoch-fenced checkpointer, clarification interrupt, cancel endpoint and MOM Excel connector are still to build.**
+
+## M2 outcomes: durable lifecycle
+
+**Closed from the M1 gaps:** the reconciler, the epoch-fenced checkpointer, the clarification interrupt and the cancel endpoint. The MOM Excel connector remains for the data PR.
+
+**Decisions taken while building:**
+- **Checkpoints use `durability="sync"`.**
+  - Why: with the default asynchronous durability, a checkpoint could still be in flight when the lease moved, and the fence then rejected it. The resumed run lost a step.
+  - Each checkpoint write takes a per-analysis advisory lock and re-checks the epoch (`FOR SHARE`) in the same transaction.
+- **Graph state carries evidence *references* only.** A resumed run reloads datasets and computations from their tables. Computation IDs derive from the fingerprint, so a restarted step reuses its rows instead of duplicating them.
+- **Clarification is its own graph node**, so answering resumes at the question without repeating the planning call.
+  - An answer re-plans once with the researcher's text. "Proceed" adopts the plan and records the assumption.
+- **The question version is bumped on pause and again on acceptance.** A duplicate answer is therefore `CLARIFICATION_STALE`, not a second resume.
+- **An accepted answer is keyed by the interrupt it answers.** Every resume looks for an answer to the pending interrupt, so the answer survives a crash of the worker that first claimed it.
+  - Once the checkpoint records the answer, the interrupt is no longer pending and the answer is not applied twice.
+  - If the worker crashed before the question was shown, the resumed run asks it again.
+- **Cancellation takes precedence over an answer.** Cancelling a queued or paused analysis supersedes its open intents, and a claim only succeeds on a queued or running analysis, so a queued answer can never resume a cancelled run.
+  - A running analysis stops at the next node or tool-call boundary.
+  - The final transitions (pause, finish) re-check `cancel_requested_at` under the row lock that decides them. A cancel arriving after the last boundary therefore still wins, and the report is discarded.
+  - An expired lease with a pending cancel is cancelled by the reconciler, not resumed.
+- **The reconciler runs every 15 s in every worker.** It replaces the 5 s dispatch cron.
+  - Concurrent passes are safe: row locks plus `SKIP LOCKED`.
+  - When a run fails for exhausted attempts, the epoch is bumped, so a late original worker stays fenced.
+- **Only active time counts against the deadline.**
+  - Each heartbeat (15 s) adds the active time since the last one. Pause and finish add the remainder.
+  - Reports are serialised, and an interval counts as reported only once its write commits. The final pause or finish therefore waits for an in-flight heartbeat rather than racing it.
+  - When a crashed run is recovered, it is charged one more interval for time its worker never reported, so recovery cannot grant extra budget.
+  - A resume gets what remains.
+
+**Verified live:**
+- An analysis left `running` by an earlier stack rebuild was resumed at worker startup.
+- A worker killed mid-run was recovered about 60 s later (lease expiry), finished on attempt 2, and wrote no duplicate computations.
+- An ambiguous question paused with options and resumed from the UI. A repeated answer got a 409.
+- A cancel during a run stopped at the next step.
+
+**Observed, not yet addressed:**
+- Nova sometimes offers far more than four clarification options.
+- The planner can pick a stale "last five years" window, e.g. 2018–2022.
+- Two drafted claims can restate the same verified assertion.
