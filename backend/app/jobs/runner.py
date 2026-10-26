@@ -27,9 +27,9 @@ from app.connectors.catalog import get_catalog
 from app.connectors.http import Fetcher, api_keys, get_snapshot_store
 from app.connectors.ratelimit import SharedRateLimiter
 from app.core.config import Provider, Settings
-from app.data.models import NormalizedDataset
+from app.data.models import NormalizedDataset, Provenance, QualityIssue
 from app.data.taxonomy import get_taxonomy
-from app.db.models import Analysis, AnalysisStatus, ComputationRow, DatasetArtifact
+from app.db.models import Analysis, AnalysisArtifact, AnalysisStatus, ComputationRow, DatasetArtifact
 from app.jobs.checkpoint import FencedPostgresSaver, Pool
 from app.jobs.lifecycle import (
     GRAPH_VERSION,
@@ -218,13 +218,28 @@ async def _load_evidence(
     sessions: async_sessionmaker[AsyncSession], analysis_id: str, refs: dict[str, Any]
 ) -> Any:
     async with sessions() as session:
-        artifacts = await session.scalars(
-            select(DatasetArtifact).where(DatasetArtifact.artifact_id.in_(refs.get("artifacts", [])))
+        rows = await session.execute(
+            select(DatasetArtifact.content, AnalysisArtifact.fetch_record)
+            .join(AnalysisArtifact, AnalysisArtifact.artifact_id == DatasetArtifact.artifact_id)
+            .where(
+                AnalysisArtifact.analysis_id == analysis_id,
+                DatasetArtifact.artifact_id.in_(refs.get("artifacts", [])),
+            )
         )
         computations = await session.scalars(
             select(ComputationRow).where(ComputationRow.analysis_id == analysis_id)
         )
-        datasets = {a.artifact_id: NormalizedDataset.model_validate(a.content) for a in artifacts}
+        datasets = {}
+        for content, fetch in rows:
+            dataset = NormalizedDataset.model_validate(content)
+            if fetch is not None:  # this analysis's own fetch, not whichever stored the artifact first
+                dataset = dataset.model_copy(
+                    update={
+                        "provenance": Provenance.model_validate(fetch["provenance"]),
+                        "quality": [QualityIssue.model_validate(i) for i in fetch["quality"]],
+                    }
+                )
+            datasets[dataset.artifact_id] = dataset
         computed = {c.computation_id: Computation.model_validate(c.content) for c in computations}
     return from_refs(refs, datasets, computed)
 

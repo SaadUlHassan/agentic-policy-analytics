@@ -6,6 +6,7 @@ import asyncio
 import time
 
 import pytest
+import respx
 from sqlalchemy import text
 
 from app.connectors.catalog import get_catalog
@@ -76,3 +77,43 @@ async def test_a_changed_workbook_is_stored_and_reloaded_with_its_own_quality(se
     )
     reloaded = restored.dataset(MOM_Q)
     assert [i.code for i in reloaded.blocking_issues(reloaded.find("info_comms")[0])] == ["UNIT_MISMATCH"]
+
+
+@respx.mock
+async def test_a_reused_artifact_keeps_each_analysis_own_disclosures_on_resume(sessions):
+    """Two analyses fetch the same workbook (same artifact): one after live discovery, one after an
+    index outage. Resuming the second restores its own DISCOVERY_FALLBACK, not the first one's
+    clean view, and the first keeps its clean view."""
+    from app.agents.evidence import EvidenceStore, to_refs
+    from app.connectors import mom
+    from app.jobs.runner import _load_evidence
+    from tests.unit.connectors.test_connectors import Unthrottled
+
+    catalog, snapshots, dataset_id = get_catalog(), get_snapshot_store(), "mrsd_3_qtly_emp_chg_by_ind"
+    workbook = catalog.get(dataset_id).last_known["xlsx"]
+    index = respx.get(mom.INDEX_URL).respond(content=snapshots.load(mom.INDEX_URL).body)
+    respx.get(workbook).respond(content=snapshots.load(workbook).body)
+
+    async def fetch_live():
+        fetcher = Fetcher(mode="live", snapshots=snapshots, backoff_s=0, limiter=Unthrottled())
+        try:
+            return await fetch(dataset_id, catalog, get_taxonomy(), fetcher)
+        finally:
+            await fetcher.aclose()
+
+    clean = await fetch_live()
+    index.respond(503)
+    after_outage = await fetch_live()
+    assert clean.artifact_id == after_outage.artifact_id, "same values, same shared artifact"
+
+    resumed = {}
+    for name, dataset in (("first", clean), ("second", after_outage)):
+        analysis_id, intent = await _new(sessions)
+        c = await claim(sessions, analysis_id, intent, name)
+        await FencedWriter(sessions, None, analysis_id, c.epoch).save_artifact(dataset)
+        refs = to_refs(EvidenceStore(datasets={dataset.artifact_id: dataset}))
+        resumed[name] = (await _load_evidence(sessions, analysis_id, refs)).dataset(dataset_id)
+
+    assert "DISCOVERY_FALLBACK" not in {i.code for i in resumed["first"].quality}
+    assert "DISCOVERY_FALLBACK" in {i.code for i in resumed["second"].quality}
+    assert resumed["second"].provenance.retrieved_at == after_outage.provenance.retrieved_at

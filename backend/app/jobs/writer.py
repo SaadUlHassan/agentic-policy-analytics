@@ -119,10 +119,18 @@ class FencedWriter:
                 )
                 .on_conflict_do_nothing()
             )
+            # The shared row above keeps whichever fetch stored it first; this analysis's own
+            # provenance and disclosures are kept here and restored with it on resume.
+            fetch = {
+                "provenance": dataset.provenance.model_dump(mode="json"),
+                "quality": [i.model_dump(mode="json") for i in dataset.quality],
+            }
             await session.execute(
                 insert(AnalysisArtifact)
-                .values(analysis_id=self.analysis_id, artifact_id=dataset.artifact_id)
-                .on_conflict_do_nothing()
+                .values(analysis_id=self.analysis_id, artifact_id=dataset.artifact_id, fetch_record=fetch)
+                .on_conflict_do_update(
+                    index_elements=["analysis_id", "artifact_id"], set_={"fetch_record": fetch}
+                )
             )
             await session.commit()
 

@@ -139,10 +139,15 @@ class RawPayloadRow(Base):
 
 
 class AnalysisArtifact(Base):
+    """An artifact as one analysis fetched it. The artifact (the values) is shared; how this fetch
+    got it (retrieval time, snapshot or live, fallbacks and other disclosures) is not."""
+
     __tablename__ = "analysis_artifacts"
 
     analysis_id: Mapped[str] = mapped_column(ForeignKey("analyses.id", ondelete="CASCADE"), primary_key=True)
     artifact_id: Mapped[str] = mapped_column(ForeignKey("dataset_artifacts.artifact_id"), primary_key=True)
+    # {"provenance": Provenance, "quality": [QualityIssue]} of this analysis's fetch.
+    fetch_record: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class ComputationRow(Base):
