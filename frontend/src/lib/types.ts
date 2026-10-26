@@ -76,6 +76,7 @@ export type Citation = {
 export type ConsistencyCheck = {
   series: string[];
   verdict: string;
+  comparable?: boolean;
   periods_compared: number;
   mismatches: Record<string, unknown>[];
   citations: string[];

@@ -27,7 +27,7 @@ from app.connectors.catalog import get_catalog
 from app.connectors.http import Fetcher, api_keys, get_snapshot_store
 from app.connectors.ratelimit import SharedRateLimiter
 from app.core.config import Provider, Settings
-from app.core.faults import Faults
+from app.core.faults import INJECTED, Faults
 from app.data.models import NormalizedDataset, Provenance, QualityIssue
 from app.data.taxonomy import get_taxonomy
 from app.db.models import Analysis, AnalysisArtifact, AnalysisStatus, ComputationRow, DatasetArtifact
@@ -110,11 +110,22 @@ async def execute(
     async def on_record(record: CallRecord) -> None:
         await writer.record_llm_call(record)
         if record.ok and record.fallback_from:
+            # Say why: an injected demo fault must read as injected, never as a real outage.
+            cause = (
+                "switched off (injected fault (demo))"
+                if INJECTED in (record.fallback_reason or "")
+                else "unavailable"
+            )
             await writer.emit(
                 record.agent,
                 "provider_fallback",
-                f"{record.fallback_from} unavailable; answered by {record.provider}",
-                {"from": record.fallback_from, "to": record.provider, "purpose": record.purpose},
+                f"{record.fallback_from} {cause}; answered by {record.provider}",
+                {
+                    "from": record.fallback_from,
+                    "to": record.provider,
+                    "purpose": record.purpose,
+                    "reason": record.fallback_reason,
+                },
             )
 
     # Only time spent running counts against the budget; a pause for clarification does not.

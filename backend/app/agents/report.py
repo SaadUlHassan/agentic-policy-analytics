@@ -130,11 +130,15 @@ def _consistency(
     return {
         "series": [check.series_a, check.series_b],
         "verdict": check.verdict,
+        "comparable": check.not_comparable is None,
         "periods_compared": len(check.periods),
         "mismatches": check.mismatches,
+        # Nothing was compared when the check was refused, so there is nothing to cite.
         "citations": citations.cite(
             [ref(check.series_a, check.artifact_a), ref(check.series_b, check.artifact_b)]
-        ),
+        )
+        if check.not_comparable is None
+        else [],
     }
 
 
@@ -257,28 +261,26 @@ def _relevant_issues(dataset: NormalizedDataset, keys: set[str]) -> list[Quality
 def _data_quality(evidence: EvidenceStore) -> list[dict[str, Any]]:
     """What was checked on each dataset the report relies on, and what was found (plan GD-4): the
     datasets of selected series ("evidence") and the republications they were cross-checked against
-    ("cross-check"). Marker meanings are the source's own, as reviewed in the manifest."""
+    ("cross-check"), including cross-checks that were refused. A dataset can play both roles: its
+    checks cover every series of it that the report relied on either way. Marker meanings are the
+    ones the fetched source states (e.g. a workbook's legend), else the reviewed manifest's."""
     selected = set(evidence.selected)
-    cross_checked = {a for c in evidence.consistency for a in (c.artifact_a, c.artifact_b)}
+    compared = {k for c in evidence.consistency for k in (c.series_a, c.series_b)}
     platforms = get_catalog().platforms
     out = []
     for dataset in evidence.datasets.values():
-        used = [s for s in dataset.series if s.key in selected]
-        if not used and dataset.artifact_id not in cross_checked:
+        used = {s.key for s in dataset.series if s.key in selected}
+        keys = used | {s.key for s in dataset.series if s.key in compared}
+        if not keys:
             continue
-        keys = {s.key for s in used} or {
-            k
-            for c in evidence.consistency
-            for k in (c.series_a, c.series_b)
-            if k.startswith(f"{dataset.dataset_id}:")
-        }
         markers: dict[str, int] = defaultdict(int)
         for series in dataset.series:
             if series.key in keys:
                 for o in series.observations:
                     if o.marker is not None:
                         markers[o.raw] += 1
-        legend = platforms[dataset.provenance.platform].markers
+        reviewed = {m: spec.meaning for m, spec in platforms[dataset.provenance.platform].markers.items()}
+        legend = {**reviewed, **dataset.source_metadata.get("legend", {})}
         out.append(
             {
                 "dataset_id": dataset.dataset_id,
@@ -296,7 +298,7 @@ def _data_quality(evidence: EvidenceStore) -> list[dict[str, Any]]:
                     {
                         "marker": raw,
                         "count": n,
-                        "meaning": legend[raw].meaning if raw in legend else "not defined by the source",
+                        "meaning": legend.get(raw, "not defined by the source"),
                         "treatment": "set to null and excluded from calculations",
                     }
                     for raw, n in sorted(markers.items())

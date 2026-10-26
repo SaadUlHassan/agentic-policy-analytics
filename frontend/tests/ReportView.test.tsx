@@ -124,3 +124,25 @@ describe("verifier independence", () => {
   });
 });
 
+describe("cross-platform checks", () => {
+  it("never shows a refused cross-check as agreement", () => {
+    const refused = {
+      ...report,
+      consistency_checks: [
+        {
+          series: ["a", "b"],
+          verdict: "not comparable (blocking quality errors: mrsd_3_qtly_emp_chg_by_ind: UNIT_MISMATCH)",
+          comparable: false,
+          periods_compared: 0,
+          mismatches: [],
+          citations: [],
+        },
+      ],
+    };
+    render(<ReportView report={refused} />);
+    const section = screen.getByRole("region", { name: "Cross-platform checks" });
+    expect(within(section).getByText(/not comparable \(blocking quality errors/)).toBeInTheDocument();
+    expect(section.textContent).not.toMatch(/✓|over 0 periods/);
+  });
+});
+

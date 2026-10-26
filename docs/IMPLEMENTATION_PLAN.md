@@ -1026,12 +1026,16 @@ All of the following was verified live: the example query on Bedrock primary, on
   - Compose passes the flag through, e.g. `ENABLE_FAULT_INJECTION=true docker compose up -d`, then `curl -X PUT localhost:8000/api/admin/faults/llm:bedrock`.
 - **An injected failure is never disguised.**
   - A switched-off provider fails in the router like a real outage, so the fallback, the circuit breaker and the `provider_fallback` events all behave as they would for a real failure. The ledger records the failure as injected.
+  - Every fallback event states its cause: "bedrock switched off (injected fault (demo)); answered by openai". This holds after the circuit opens too, because the circuit remembers the failure that opened it.
   - A switched-off source is served from its snapshot. The disclosure reads "source:singstat switched off (injected fault (demo))".
   - A switchboard outage counts as "no faults", never as an outage of its own.
 - **Verifier independence is recorded.** The router keeps which provider answered each purpose. The report's `verification.narrative_check` lists the writers, the judges and whether they differ. When they do not (the other provider was unavailable), a limitation says the check was not independent.
 - **The report has a `data_quality` section.** It covers each dataset used as evidence, and each republication it was cross-checked against, with:
   - every relevant check, with severity and count;
   - the markers actually present in the values used, with the source's own meaning and their treatment (nulled, excluded from calculations).
+  - A dataset used both ways (evidence for one sector, cross-check for another) lists every series it was relied on for.
+  - Cross-checks that were refused (an identity mismatch, or blocking errors on either side) are recorded and shown as "not comparable", never as agreement, and the broken dataset stays in the panel with its errors.
+  - Marker meanings are the ones the fetched source states (a workbook's own legend), falling back to the reviewed manifest. A disagreement between them is flagged as `LEGEND_CHANGED`.
   - The UI shows severity with an icon and a word, never colour alone.
 - **Association findings carry an "Exploratory association" tag** in the UI.
 - **Unidentified rows are named with their classification** (e.g. "Information And Communications (SSIC2005)"). The panel showed that without it, a series used as evidence appeared to be unidentified.

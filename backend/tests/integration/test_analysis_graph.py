@@ -953,3 +953,30 @@ async def test_report_lists_what_was_checked_on_each_dataset(sessions, database_
     for dataset in panel.values():
         for marker in dataset["markers"]:
             assert marker["meaning"] and marker["treatment"].startswith("set to null")
+
+
+async def test_fallback_events_say_the_outage_was_injected(sessions, database_url, checkpoints, redis_client):
+    from app.core.faults import Faults
+
+    analysis_id, intent = await _start(sessions)
+    await Faults(redis_client, enabled=True).switch_on("llm:bedrock")
+    models = {"openai": ScriptedChatModel(replies=[*_happy_path_script(), ALL_SUPPORTED])}
+
+    status = await execute(
+        sessions,
+        redis_client,
+        _settings(database_url, enable_fault_injection=True),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models=models,
+    )
+
+    assert status == "completed"
+    fallbacks = [e for e in await _events(sessions, analysis_id) if e["type"] == "provider_fallback"]
+    # Including those after the circuit opened: the cause it remembers is the injected fault.
+    assert fallbacks and all(
+        e["title"] == "bedrock switched off (injected fault (demo)); answered by openai" for e in fallbacks
+    )
+    assert all("injected fault (demo)" in e["detail"]["reason"] for e in fallbacks)

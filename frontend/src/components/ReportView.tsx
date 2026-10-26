@@ -83,18 +83,21 @@ export function ReportView({ report }: { report: Report }) {
         <section aria-label="Cross-platform checks">
           <h3 className="mb-2 text-base font-semibold">Cross-platform consistency</h3>
           <ul className="flex flex-col gap-1 text-sm">
-            {report.consistency_checks.map((c) => (
-              <li key={c.series.join("|")}>
-                <span className={c.mismatches.length ? "text-warning" : "text-good"} aria-hidden>
-                  {c.mismatches.length ? "! " : "✓ "}
-                </span>
-                {c.verdict} over {c.periods_compared} periods
-                {c.citations.map((id) => (
-                  <CitationChip key={id} id={id} />
-                ))}
-                <span className="block text-xs text-ink-3">Same originating agency: this confirms publication, not independent corroboration.</span>
-              </li>
-            ))}
+            {report.consistency_checks.map((c) => {
+              const agreed = c.comparable !== false && c.mismatches.length === 0;
+              return (
+                <li key={c.series.join("|")}>
+                  <span className={agreed ? "text-good" : "text-warning"} aria-hidden>
+                    {agreed ? "✓ " : "! "}
+                  </span>
+                  {c.comparable === false ? c.verdict : `${c.verdict} over ${c.periods_compared} periods`}
+                  {c.citations.map((id) => (
+                    <CitationChip key={id} id={id} />
+                  ))}
+                  <span className="block text-xs text-ink-3">Same originating agency: this confirms publication, not independent corroboration.</span>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
