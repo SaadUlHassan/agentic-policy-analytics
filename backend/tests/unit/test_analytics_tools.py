@@ -13,8 +13,8 @@ from app.data.periods import Frequency
 
 TOOLS = Toolkit(taxonomy_version="test")
 
-# Real SingStat M182841 'Information And Communications', thousands, year-end.
-ICT_EMPLOYMENT = {"2019": 150.9, "2020": 157.6, "2021": 165.0, "2022": 176.4, "2023": 179.5, "2024": 180.3}
+# Real SingStat M182841 'Information And Communications', thousands, year-end (snapshot of 2026-10-25).
+ICT_EMPLOYMENT = {"2019": 154.8, "2020": 157.6, "2021": 172.9, "2022": 187.8, "2023": 181.9, "2024": 180.3}
 
 
 def _series(
@@ -176,7 +176,10 @@ def test_trend_eligibility():
 
 def test_compare_periods_requires_disjoint_ordered_windows():
     c = _ok(TOOLS.compare_periods(*_series(ICT_EMPLOYMENT), "2019", "2020", "2023", "2024"))
-    assert c.result["difference"].value == pytest.approx((179.5 + 180.3) / 2 - (150.9 + 157.6) / 2, rel=1e-12)
+    expected = (ICT_EMPLOYMENT["2023"] + ICT_EMPLOYMENT["2024"]) / 2 - (
+        ICT_EMPLOYMENT["2019"] + ICT_EMPLOYMENT["2020"]
+    ) / 2
+    assert c.result["difference"].value == pytest.approx(expected, rel=1e-12)
     _refused(
         TOOLS.compare_periods(*_series(ICT_EMPLOYMENT), "2019", "2022", "2021", "2024"),
         RefusalCode.INVALID_WINDOW,

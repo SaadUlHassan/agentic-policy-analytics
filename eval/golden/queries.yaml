@@ -1,0 +1,121 @@
+# Golden set (plan §8.3), pinned to the snapshots in data/snapshots (captured 2026-10-25).
+#
+# `computations` are the statistics a correct analysis rests on. Their expected values are computed
+# independently of the application by eval/compute_expected.py, straight from the raw snapshot
+# payloads, and stored in eval/golden/expected.json for review. The application's toolkit must
+# reproduce them within tolerance (computation-accuracy gate, CI).
+#
+# `refusals` are requests the method policy must refuse, with the reason code it must give.
+#
+# `queries` are researcher questions for the live golden runs: what a correct run should plan, select,
+# compute and refuse. `series_any_of` lists acceptable selections (a mirror on another platform
+# measures the same thing).
+version: 1
+
+series:
+  ict_employment_level: {dataset: M182841, key: "M182841:3.4@SSIC2020", source_row: "3.4", frequency: annual, unit: persons, scale: 1000}
+  ict_employment_change: {dataset: M183891, key: "M183891:1.2.4@SSIC2020", source_row: "1.2.4", frequency: quarterly, unit: persons, scale: 1}
+  ict_vacancies: {dataset: M184071, key: "M184071:1.2.4@SSIC2020", source_row: "1.2.4", frequency: quarterly, unit: vacancies, scale: 1}
+  it_services_vacancies: {dataset: M184071, key: "M184071:1.2.4.2@SSIC2020", source_row: "1.2.4.2", frequency: quarterly, unit: vacancies, scale: 1}
+  ict_vacancies_annual_average:
+    dataset: d_01966fdb498fa7fa2863635e25539693
+    key: "d_01966fdb498fa7fa2863635e25539693:information and communications@SSIC2020"
+    source_row: information and communications
+    frequency: annual
+    unit: vacancies
+    scale: 1
+
+computations:
+  C01: {tool: change_between, series: ict_employment_level, params: {start: "2020", end: "2024"}}
+  C02: {tool: cagr, series: ict_employment_level, params: {start: "2020", end: "2024"}}
+  C03: {tool: trend, series: ict_employment_level, params: {start: "2020", end: "2024"}}
+  C04: {tool: yoy_change, series: ict_employment_level, params: {period: "2023"}}
+  C05: {tool: cumulative, series: ict_employment_change, params: {start: "2020-Q1", end: "2024-Q4"}}
+  C06:
+    tool: compare_periods
+    series: ict_employment_change
+    params: {a_start: "2020-Q1", a_end: "2022-Q2", b_start: "2022-Q3", b_end: "2024-Q4"}
+  C07: {tool: change_between, series: ict_vacancies, params: {start: "2020-Q1", end: "2024-Q4"}}
+  C08: {tool: change_between, series: it_services_vacancies, params: {start: "2020-Q1", end: "2024-Q4"}}
+  C09: {tool: trend, series: ict_vacancies, params: {start: "2020-Q1", end: "2024-Q4"}}
+  C10:
+    tool: correlate
+    series: ict_vacancies
+    other: ict_employment_change
+    params: {start: "2020-Q1", end: "2024-Q4", lag: "0"}
+  C11:
+    tool: correlate
+    series: ict_vacancies
+    other: ict_employment_change
+    params: {start: "2020-Q1", end: "2024-Q4", lag: "1"}
+  C12: {tool: cagr, series: ict_vacancies, params: {start: "2020-Q1", end: "2024-Q4"}}
+
+refusals:
+  R01:
+    tool: correlate
+    series: ict_employment_level
+    other: ict_vacancies_annual_average
+    params: {start: "2020", end: "2024", lag: "0"}
+    code: REFERENCE_MISMATCH  # year-end stock vs mean of four quarter ends
+  R02:
+    tool: correlate
+    series: ict_vacancies
+    other: ict_employment_change
+    params: {start: "2022-Q1", end: "2024-Q4", lag: "1"}
+    code: INSUFFICIENT_PAIRS  # 11 pairs; at least 12 are required
+  R03: {tool: cagr, series: ict_employment_change, params: {start: "2020-Q1", end: "2024-Q4"}, code: NOT_A_LEVEL}
+  R04: {tool: change_between, series: ict_employment_change, params: {start: "2020-Q1", end: "2024-Q4"}, code: NOT_A_LEVEL}
+
+queries:
+  - id: G01
+    covers: trend, change and CAGR of a stock
+    query: Analyse employment trends in the technology sector from 2020-2024
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_employment_level]], computations: [C01, C02, C03]}
+  - id: G02
+    covers: year-on-year change
+    query: How did employment in information and communications change in 2023 compared with 2022?
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_employment_level]], computations: [C04]}
+  - id: G03
+    covers: compound annual growth
+    query: What was the compound annual growth rate of employment in information and communications between 2020 and 2024?
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_employment_level]], computations: [C02]}
+  - id: G04
+    covers: period comparison of a flow
+    query: Did quarterly employment growth in information and communications weaken after mid-2022, compared with 2020 to mid-2022?
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_employment_change]], computations: [C05, C06]}
+  - id: G05
+    covers: quarterly correlation (the named pair)
+    query: Were ICT job vacancies and quarterly ICT employment change related between 2020 and 2024?
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_vacancies, ict_employment_change]], computations: [C10, C11]}
+  - id: G06
+    covers: refused annual correlation
+    query: Is annual employment in information and communications correlated with annual ICT job vacancies from 2020 to 2024?
+    expect: {in_scope: true, sectors: [info_comms], refusals: [R01]}
+  - id: G07
+    covers: subsector kept distinct from its parent
+    query: How did job vacancies in IT and other information services change compared with the wider ICT sector, 2020 to 2024?
+    expect:
+      in_scope: true
+      sectors: [info_comms, it_info_services]
+      series_any_of: [[ict_vacancies, it_services_vacancies]]
+      computations: [C07, C08]
+  - id: G08
+    covers: ambiguous question
+    query: How is the sector doing?
+    expect: {clarification: true}
+  - id: G09
+    covers: period outside the data's coverage
+    query: Analyse employment in information and communications from 1985 to 1990
+    expect: {in_scope: true, findings: none}
+  - id: G10
+    covers: out of domain
+    query: What happened to HDB resale flat prices in 2024?
+    expect: {in_scope: false, findings: none}
+  - id: G11
+    covers: paraphrase of G01
+    query: How has employment in Singapore's infocomm sector developed between 2020 and 2024?
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_employment_level]], computations: [C01]}
+  - id: G12
+    covers: paraphrase of G05
+    query: Quarter by quarter from 2020 to 2024, did more ICT job openings go with stronger ICT hiring?
+    expect: {in_scope: true, sectors: [info_comms], series_any_of: [[ict_vacancies, ict_employment_change]], computations: [C10]}

@@ -1,0 +1,257 @@
+{
+  "computations": {
+    "C01": {
+      "fields": {
+        "abs_change": {
+          "scale": 1000,
+          "tolerance": "closed_form",
+          "unit": "persons",
+          "value": 22.700000000000017
+        },
+        "end_value": {
+          "scale": 1000,
+          "tolerance": "exact",
+          "unit": "persons",
+          "value": 180.3
+        },
+        "pct_change": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "percent",
+          "value": 14.403553299492398
+        },
+        "start_value": {
+          "scale": 1000,
+          "tolerance": "exact",
+          "unit": "persons",
+          "value": 157.6
+        }
+      },
+      "tool": "change_between"
+    },
+    "C02": {
+      "fields": {
+        "cagr_pct": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "percent_per_year",
+          "value": 3.4212728201513887
+        }
+      },
+      "tool": "cagr"
+    },
+    "C03": {
+      "fields": {
+        "slope": {
+          "scale": 1000,
+          "tolerance": "estimator",
+          "unit": "persons_per_year",
+          "value": 5.440000000000003
+        }
+      },
+      "tool": "trend"
+    },
+    "C04": {
+      "fields": {
+        "abs_change": {
+          "scale": 1000,
+          "tolerance": "closed_form",
+          "unit": "persons",
+          "value": -5.900000000000006
+        },
+        "end_value": {
+          "scale": 1000,
+          "tolerance": "exact",
+          "unit": "persons",
+          "value": 181.9
+        },
+        "pct_change": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "percent",
+          "value": -3.141640042598512
+        },
+        "start_value": {
+          "scale": 1000,
+          "tolerance": "exact",
+          "unit": "persons",
+          "value": 187.8
+        }
+      },
+      "tool": "yoy_change"
+    },
+    "C05": {
+      "fields": {
+        "total": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "persons",
+          "value": 26800.0
+        }
+      },
+      "tool": "cumulative"
+    },
+    "C06": {
+      "fields": {
+        "difference": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "persons",
+          "value": -2600.0
+        },
+        "mean_a": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "persons",
+          "value": 2640.0
+        },
+        "mean_b": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "persons",
+          "value": 40.0
+        }
+      },
+      "tool": "compare_periods"
+    },
+    "C07": {
+      "fields": {
+        "abs_change": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "vacancies",
+          "value": 1000.0
+        },
+        "end_value": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "vacancies",
+          "value": 5600.0
+        },
+        "pct_change": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "percent",
+          "value": 21.73913043478261
+        },
+        "start_value": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "vacancies",
+          "value": 4600.0
+        }
+      },
+      "tool": "change_between"
+    },
+    "C08": {
+      "fields": {
+        "abs_change": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "vacancies",
+          "value": 1100.0
+        },
+        "end_value": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "vacancies",
+          "value": 5100.0
+        },
+        "pct_change": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "percent",
+          "value": 27.500000000000004
+        },
+        "start_value": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "vacancies",
+          "value": 4000.0
+        }
+      },
+      "tool": "change_between"
+    },
+    "C09": {
+      "fields": {
+        "slope": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "vacancies_per_year",
+          "value": 160.6015037593985
+        },
+        "slope_ci_high": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "vacancies_per_year",
+          "value": 1197.3832968630165
+        },
+        "slope_ci_low": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "vacancies_per_year",
+          "value": -876.1802893442203
+        }
+      },
+      "tool": "trend"
+    },
+    "C10": {
+      "fields": {
+        "pairs": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "pairs",
+          "value": 20.0
+        },
+        "pearson_r": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "correlation",
+          "value": 0.46771700851419795
+        },
+        "spearman_rho": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "correlation",
+          "value": 0.47120816284266964
+        }
+      },
+      "tool": "correlate"
+    },
+    "C11": {
+      "fields": {
+        "pairs": {
+          "scale": 1,
+          "tolerance": "exact",
+          "unit": "pairs",
+          "value": 19.0
+        },
+        "pearson_r": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "correlation",
+          "value": 0.3598075606260415
+        },
+        "spearman_rho": {
+          "scale": 1,
+          "tolerance": "estimator",
+          "unit": "correlation",
+          "value": 0.3104962969613563
+        }
+      },
+      "tool": "correlate"
+    },
+    "C12": {
+      "fields": {
+        "cagr_pct": {
+          "scale": 1,
+          "tolerance": "closed_form",
+          "unit": "percent_per_year",
+          "value": 4.228215989817086
+        }
+      },
+      "tool": "cagr"
+    }
+  },
+  "snapshots_captured_at": "2026-10-25T16:31:21+00:00"
+}
