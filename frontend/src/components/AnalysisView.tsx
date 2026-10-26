@@ -9,10 +9,17 @@ import { ClarificationCard } from "@/components/ClarificationCard";
 import { PlanCard } from "@/components/PlanCard";
 import { ReportView } from "@/components/ReportView";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getAnalysis } from "@/lib/api";
+import { UsageSummary } from "@/components/UsageSummary";
+import { type ExportFormat, exportUrl, getAnalysis } from "@/lib/api";
 import { liveStatus, pendingQuestion } from "@/lib/events";
 import { type AnalysisDetail, type Plan, TERMINAL_STATUSES } from "@/lib/types";
 import { useEventStream } from "@/lib/useEventStream";
+
+const EXPORTS: Record<ExportFormat, string> = {
+  md: "Report (Markdown)",
+  json: "Evidence bundle (JSON)",
+  csv: "Source values (CSV)",
+};
 
 export function AnalysisView({ id }: { id: string }) {
   const { events, connected, finalStatus } = useEventStream(id);
@@ -54,6 +61,17 @@ export function AnalysisView({ id }: { id: string }) {
             <CancelButton analysisId={id} requested={analysis.cancel_requested && status === "running"} />
           )}
         </div>
+        {analysis?.report && (
+          <nav aria-label="Export" className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
+            <span className="text-ink-3">Export:</span>
+            {(Object.entries(EXPORTS) as [ExportFormat, string][]).map(([format, label]) => (
+              <a key={format} href={exportUrl(id, format)} download className="underline">
+                {label}
+              </a>
+            ))}
+          </nav>
+        )}
+        {analysis?.usage && finalStatus && <UsageSummary usage={analysis.usage} />}
         {analysis?.error && (
           <p role="alert" className="text-sm text-critical">
             The analysis could not finish ({analysis.error.code}).

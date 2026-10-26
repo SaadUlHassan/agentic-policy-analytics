@@ -38,7 +38,13 @@ export type Plan = {
   rationale: string;
 };
 
-export type Finding = { id: string; kind: string; text: string; citations: string[] };
+export type Finding = {
+  id: string;
+  kind: string;
+  text: string;
+  citations: string[];
+  series?: string[]; // series keys the finding rests on (absent in reports stored before it existed)
+};
 
 export type ChartSeries = {
   series_key: string;
@@ -131,5 +137,18 @@ export type AnalysisDetail = AnalysisSummary & {
   error: { code: string; detail?: string } | null;
   clarification: ClarificationQuestion | null;
   cancel_requested: boolean;
+  usage?: Usage;
   last_event_seq: number;
+};
+
+export type Usage = {
+  llm_calls: number;
+  failed_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  llm_latency_ms: number;
+  providers: Record<string, number>;
+  cost_usd: number | null;
+  unpriced_models: string[];
+  active_ms: number;
 };

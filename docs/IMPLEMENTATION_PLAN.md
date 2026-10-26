@@ -1046,3 +1046,25 @@ All of the following was verified live: the example query on Bedrock primary, on
 - The narrative check was recorded and disclosed as not independent.
 - The panel listed four datasets: two as evidence, two as cross-checks.
 
+## M3 outcomes: exports, history and dashboard
+
+**Delivered:** exports, a history status filter with paging, a usage summary, and chart interactions.
+
+**Decisions taken while building:**
+- **Exports are built only from what was stored when the analysis finished** (`GET /api/analyses/{id}/export?format=md|json|csv`). Nothing is recomputed or regenerated, so an export matches what the researcher saw.
+  - Markdown: the readable report.
+  - JSON bundle: the analysis, the verified report and every pinned dataset version (identity, provenance, raw payload hashes).
+  - CSV: the exact stored observations of each selected series in the plan window: value, source marker, raw source text, unit, scale and citation.
+  - Drafts are never exportable, because only verified findings reach the report. Exporting before a report exists is a `409 REPORT_NOT_AVAILABLE`.
+  - The report's selected series now record their `artifact_id`. Older reports resolve the version their citation pins. When several versions are stored and none is pinned, nothing is exported rather than a guess.
+  - The JSON bundle shows each dataset as this analysis fetched it (its own retrieval time, snapshot use and raw hashes), using the same fetch-record overlay as resume.
+- **Cost counts every call, failed ones included, and is shown only when every model used has a configured price and every call's token usage is known.** A structured-output failure is metered from its rejected replies (they were generated), and a repaired answer counts both replies. An injected fault sent nothing, so it is recorded as zero. A failure with unknown usage, such as a timeout, makes the cost unknown.
+  - Prices come from `LLM_PRICES` (USD per million input and output tokens); they are configuration, never guesses. Otherwise the UI says "cost not configured" rather than showing a partial total.
+  - Calls, tokens, LLM latency, active time and the provider mix are always shown.
+- **History** filters by status and pages with the existing keyset cursor ("Load more"). A page requested under an earlier filter is discarded when it arrives.
+- **Charts:**
+  - Series can be toggled; at least one stays visible, and colours stay with their series.
+  - A period range filter applies to both the chart and the table view.
+  - Hovering or focusing a finding highlights the chart series it rests on. Findings record the series keys behind their computations, because one citation can cover several sectors of a dataset; older reports fall back to citations.
+  - Tables scroll horizontally on narrow screens.
+

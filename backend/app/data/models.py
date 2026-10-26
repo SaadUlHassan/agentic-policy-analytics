@@ -113,6 +113,18 @@ class NormalizedDataset(BaseModel):
         digest = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
         return self.model_copy(update={"artifact_id": digest})
 
+    def as_fetched(self, fetch_record: dict[str, Any] | None) -> NormalizedDataset:
+        """This artifact as one analysis fetched it. The values are shared; provenance and fetch-time
+        disclosures (snapshot use, fallbacks) are that analysis's own, kept in its fetch record."""
+        if fetch_record is None:  # stored before fetch records existed
+            return self
+        return self.model_copy(
+            update={
+                "provenance": Provenance.model_validate(fetch_record["provenance"]),
+                "quality": [QualityIssue.model_validate(i) for i in fetch_record["quality"]],
+            }
+        )
+
     def blocking_issues(self, series: SeriesData) -> list[QualityIssue]:
         """Error-severity issues on this series (or on the whole dataset): such evidence is unusable.
         Issues raised before regime splitting are keyed without the "@scheme" suffix."""

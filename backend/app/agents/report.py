@@ -47,6 +47,14 @@ def build_report(
             "text": render_claim(c, evidence.computations),
             "citations": citations.cite(claim_refs(c, evidence.computations)),
             "computations": sorted({a.computation_id for a in c.assertions.values()}),
+            # The series the finding rests on (a citation can cover several series of one dataset).
+            "series": sorted(
+                {
+                    i.series_key
+                    for a in c.assertions.values()
+                    for i in evidence.computations[a.computation_id].inputs
+                }
+            ),
         }
         for c in verified
     ]
@@ -102,6 +110,7 @@ def build_report(
                 {
                     "series_key": k,
                     "dataset_id": s.source.dataset_id,
+                    "artifact_id": s.source.artifact_id,
                     "subject": s.source.identity.subject(),
                     "reason": s.reason,
                 }

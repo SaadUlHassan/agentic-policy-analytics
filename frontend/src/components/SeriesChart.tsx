@@ -26,10 +26,24 @@ export function unitLabel(unit: string, scale: number): string {
 
 const formatValue = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
-/** One unit per chart (never a dual axis). Values are the source observations, unmodified. */
-export function SeriesChart({ chart }: { chart: Chart }) {
+/** One unit per chart (never a dual axis). Values are the source observations, unmodified; the
+ *  series toggles and period range only change what is shown, never the stored data.
+ *  `highlight` holds series keys: the series behind the finding in focus stay prominent. */
+export function SeriesChart({ chart, highlight }: { chart: Chart; highlight?: ReadonlySet<string> }) {
   const [asTable, setAsTable] = useState(false);
-  const periods = [...new Set(chart.series.flatMap((s) => s.points.map((p) => p.period)))].sort();
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const allPeriods = [...new Set(chart.series.flatMap((s) => s.points.map((p) => p.period)))].sort();
+  const [range, setRange] = useState<[number, number]>([0, allPeriods.length - 1]);
+  const periods = allPeriods.slice(range[0], range[1] + 1);
+  const shown = chart.series.filter((s) => !hidden.has(s.series_key));
+  const dimmed = (seriesKey: string) => Boolean(highlight?.size) && !highlight?.has(seriesKey);
+  const toggle = (key: string) =>
+    setHidden((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else if (shown.length > 1) next.add(key); // at least one series stays visible
+      return next;
+    });
   const rows = periods.map((period) => ({
     period,
     ...Object.fromEntries(chart.series.map((s) => [s.series_key, s.points.find((p) => p.period === period)?.value ?? null])),
@@ -47,34 +61,81 @@ export function SeriesChart({ chart }: { chart: Chart }) {
           {asTable ? "Show chart" : "Show table"}
         </button>
       </figcaption>
-      {asTable ? (
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="text-ink-3">
-              <th className="py-1 font-medium">Period</th>
-              {chart.series.map((s) => (
-                <th key={s.series_key} className="py-1 font-medium">
-                  {s.label} [{s.citation}]
-                </th>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+        {multi &&
+          chart.series.map((s, i) => (
+            <button
+              key={s.series_key}
+              type="button"
+              aria-pressed={!hidden.has(s.series_key)}
+              onClick={() => toggle(s.series_key)}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-ink-2 aria-pressed:text-ink-1 aria-[pressed=false]:line-through aria-[pressed=false]:opacity-60"
+            >
+              <span aria-hidden className="inline-block h-2 w-2 rounded-full" style={{ background: SERIES_COLORS[i] }} />
+              {s.label}
+            </button>
+          ))}
+        {allPeriods.length > 2 && (
+          <span className="ml-auto inline-flex items-center gap-1 text-ink-3">
+            <label htmlFor={`${chart.id}-from`}>From</label>
+            <select
+              id={`${chart.id}-from`}
+              value={range[0]}
+              onChange={(e) => setRange([Number(e.target.value), Math.max(Number(e.target.value), range[1])])}
+              className="rounded border border-border bg-surface px-1"
+            >
+              {allPeriods.map((p, i) => (
+                <option key={p} value={i}>
+                  {p}
+                </option>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.period} className="border-t border-border">
-                <td className="py-1">{row.period}</td>
-                {chart.series.map((s) => {
-                  const v = s.points.find((p) => p.period === row.period)?.value ?? null;
-                  return (
-                    <td key={s.series_key} className="py-1 tabular-nums">
-                      {v === null ? "—" : formatValue(v)}
-                    </td>
-                  );
-                })}
+            </select>
+            <label htmlFor={`${chart.id}-to`}>to</label>
+            <select
+              id={`${chart.id}-to`}
+              value={range[1]}
+              onChange={(e) => setRange([Math.min(range[0], Number(e.target.value)), Number(e.target.value)])}
+              className="rounded border border-border bg-surface px-1"
+            >
+              {allPeriods.map((p, i) => (
+                <option key={p} value={i}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </span>
+        )}
+      </div>
+      {asTable ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-ink-3">
+                <th className="py-1 font-medium">Period</th>
+                {shown.map((s) => (
+                  <th key={s.series_key} className="py-1 font-medium">
+                    {s.label} [{s.citation}]
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.period} className="border-t border-border">
+                  <td className="py-1">{row.period}</td>
+                  {shown.map((s) => {
+                    const v = s.points.find((p) => p.period === row.period)?.value ?? null;
+                    return (
+                      <td key={s.series_key} className="py-1 tabular-nums">
+                        {v === null ? "—" : formatValue(v)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="h-64 w-full">
           <ResponsiveContainer>
@@ -88,20 +149,23 @@ export function SeriesChart({ chart }: { chart: Chart }) {
                 cursor={{ stroke: "var(--text-muted)", strokeDasharray: "3 3" }}
               />
               {multi && <Legend wrapperStyle={{ fontSize: 12, color: "var(--text-secondary)" }} />}
-              {chart.series.map((s, i) => (
-                <Line
-                  key={s.series_key}
-                  type="linear"
-                  dataKey={s.series_key}
-                  name={`${s.label} [${s.citation}]`}
-                  stroke={SERIES_COLORS[i]}
-                  strokeWidth={2}
-                  dot={{ r: 4, strokeWidth: 2, fill: "var(--surface)" }}
-                  activeDot={{ r: 5 }}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              ))}
+              {chart.series.map((s, i) =>
+                hidden.has(s.series_key) ? null : (
+                  <Line
+                    key={s.series_key}
+                    type="linear"
+                    dataKey={s.series_key}
+                    name={`${s.label} [${s.citation}]`}
+                    stroke={SERIES_COLORS[i]}
+                    strokeOpacity={dimmed(s.series_key) ? 0.25 : 1}
+                    strokeWidth={dimmed(s.series_key) ? 2 : highlight?.size ? 3 : 2}
+                    dot={{ r: 4, strokeWidth: 2, fill: "var(--surface)" }}
+                    activeDot={{ r: 5 }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                ),
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>

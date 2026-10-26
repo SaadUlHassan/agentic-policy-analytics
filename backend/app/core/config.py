@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "apac.amazon.nova-pro-v1:0"
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-5.5"
+    # USD per million (input, output) tokens by model id, from the providers' published rates:
+    # LLM_PRICES='{"<model id>": [<input>, <output>]}'. Empty by default: cost is shown only when every
+    # model used has a configured price.
+    llm_prices: dict[str, tuple[float, float]] = {}
 
     # Data (plan §4.5-4.6). DATA_DIR holds the manifest, taxonomy and snapshots.
     data_mode: Literal["live", "snapshot"] = "live"

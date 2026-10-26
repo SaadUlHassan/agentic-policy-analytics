@@ -57,8 +57,30 @@ class LLMUnavailable(Exception):
     """No provider produced a usable answer within the deadline."""
 
 
+@dataclass(frozen=True)
+class Metered:
+    """Token usage of one logical call that took several model responses (a structured answer and
+    its repair), or of a call that sent no request. `usage_metadata` is None when any response did
+    not report its usage: then the total is unknown, not smaller."""
+
+    usage_metadata: dict[str, int] | None
+
+    @classmethod
+    def of(cls, responses: Sequence[Any]) -> Metered:
+        usages = [getattr(r, "usage_metadata", None) for r in responses]
+        known = [u for u in usages if u is not None]
+        if not usages or len(known) < len(usages):
+            return cls(None)
+        return cls({k: sum(int(u.get(k) or 0) for u in known) for k in ("input_tokens", "output_tokens")})
+
+
+NO_REQUEST = Metered({"input_tokens": 0, "output_tokens": 0})
+
+
 class StructuredOutputError(Exception):
-    pass
+    def __init__(self, message: str, metered: Metered) -> None:
+        super().__init__(message)
+        self.metered = metered  # the rejected replies were still generated, and may be billed
 
 
 @dataclass
@@ -184,13 +206,15 @@ class LLMRouter:
             ends_at = (
                 self.clock() + limit_s
             )  # the repair attempt shares this budget; it does not get a fresh one
+            responses: list[Any] = []
             for repair in (False, True):
                 remaining = ends_at - self.clock()
                 if remaining <= 0:
                     raise TimeoutError("no time left for a structured-output repair")
                 out = cast(dict[str, Any], await asyncio.wait_for(runnable.ainvoke(history), remaining))
+                responses.append(out.get("raw"))
                 if out.get("parsed") is not None and out.get("parsing_error") is None:
-                    return out["parsed"], out.get("raw")
+                    return out["parsed"], Metered.of(responses)
                 if repair:
                     break
                 history = [
@@ -200,7 +224,9 @@ class LLMRouter:
                         "Reply again using exactly the required structure."
                     ),
                 ]
-            raise StructuredOutputError(f"invalid {schema.__name__}: {out.get('parsing_error')}")
+            raise StructuredOutputError(
+                f"invalid {schema.__name__}: {out.get('parsing_error')}", Metered.of(responses)
+            )
 
         order = list(reversed(self.settings.llm_provider_order)) if prefer_independent else None
         return await self._run(call, agent=agent, purpose=purpose, deadline=deadline, order=order)
@@ -245,8 +271,11 @@ class LLMRouter:
                     result, raw = await call(self.model(provider), timeout)
                 except Exception as exc:
                     retry = is_retryable(exc) and attempt + 1 < self.attempts_per_provider
+                    # What the failed call consumed: nothing if no request was sent, the rejected
+                    # replies' usage for a structured-output failure, otherwise unknown.
+                    consumed = NO_REQUEST if isinstance(exc, InjectedFault) else getattr(exc, "metered", None)
                     await self._record(
-                        provider, agent, purpose, started, None, exc, previous_failed, previous_error
+                        provider, agent, purpose, started, consumed, exc, previous_failed, previous_error
                     )
                     if retry:
                         await asyncio.sleep(self.backoff_s * (attempt + 1))
