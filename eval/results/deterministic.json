@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-26T21:39:26+00:00",
+  "generated_at": "2026-10-26T21:52:32+00:00",
   "snapshots_captured_at": "2026-10-25T16:31:21+00:00",
   "gates": {
     "expectations_current": true,
@@ -16,6 +16,8 @@
       "expected": 22.700000000000017,
       "actual": 22.700000000000017,
       "tolerance": "closed_form",
+      "expected_unit": "persons x1000",
+      "actual_unit": "persons x1000",
       "ok": true
     },
     {
@@ -24,6 +26,8 @@
       "expected": 180.3,
       "actual": 180.3,
       "tolerance": "exact",
+      "expected_unit": "persons x1000",
+      "actual_unit": "persons x1000",
       "ok": true
     },
     {
@@ -32,6 +36,8 @@
       "expected": 14.403553299492398,
       "actual": 14.403553299492398,
       "tolerance": "closed_form",
+      "expected_unit": "percent x1",
+      "actual_unit": "percent x1",
       "ok": true
     },
     {
@@ -40,6 +46,8 @@
       "expected": 157.6,
       "actual": 157.6,
       "tolerance": "exact",
+      "expected_unit": "persons x1000",
+      "actual_unit": "persons x1000",
       "ok": true
     },
     {
@@ -48,6 +56,8 @@
       "expected": 3.4212728201513887,
       "actual": 3.4212728201513887,
       "tolerance": "closed_form",
+      "expected_unit": "percent_per_year x1",
+      "actual_unit": "percent_per_year x1",
       "ok": true
     },
     {
@@ -56,6 +66,8 @@
       "expected": 5.440000000000003,
       "actual": 5.439999999999988,
       "tolerance": "estimator",
+      "expected_unit": "persons_per_year x1000",
+      "actual_unit": "persons_per_year x1000",
       "ok": true
     },
     {
@@ -64,6 +76,8 @@
       "expected": -5.900000000000006,
       "actual": -5.900000000000006,
       "tolerance": "closed_form",
+      "expected_unit": "persons x1000",
+      "actual_unit": "persons x1000",
       "ok": true
     },
     {
@@ -72,6 +86,8 @@
       "expected": 181.9,
       "actual": 181.9,
       "tolerance": "exact",
+      "expected_unit": "persons x1000",
+      "actual_unit": "persons x1000",
       "ok": true
     },
     {
@@ -80,6 +96,8 @@
       "expected": -3.141640042598512,
       "actual": -3.141640042598512,
       "tolerance": "closed_form",
+      "expected_unit": "percent x1",
+      "actual_unit": "percent x1",
       "ok": true
     },
     {
@@ -88,6 +106,8 @@
       "expected": 187.8,
       "actual": 187.8,
       "tolerance": "exact",
+      "expected_unit": "persons x1000",
+      "actual_unit": "persons x1000",
       "ok": true
     },
     {
@@ -96,6 +116,8 @@
       "expected": 26800.0,
       "actual": 26800.0,
       "tolerance": "exact",
+      "expected_unit": "persons x1",
+      "actual_unit": "persons x1",
       "ok": true
     },
     {
@@ -104,6 +126,8 @@
       "expected": -2600.0,
       "actual": -2600.0,
       "tolerance": "closed_form",
+      "expected_unit": "persons x1",
+      "actual_unit": "persons x1",
       "ok": true
     },
     {
@@ -112,6 +136,8 @@
       "expected": 2640.0,
       "actual": 2640.0,
       "tolerance": "closed_form",
+      "expected_unit": "persons x1",
+      "actual_unit": "persons x1",
       "ok": true
     },
     {
@@ -120,6 +146,8 @@
       "expected": 40.0,
       "actual": 40.0,
       "tolerance": "closed_form",
+      "expected_unit": "persons x1",
+      "actual_unit": "persons x1",
       "ok": true
     },
     {
@@ -128,6 +156,8 @@
       "expected": 1000.0,
       "actual": 1000.0,
       "tolerance": "exact",
+      "expected_unit": "vacancies x1",
+      "actual_unit": "vacancies x1",
       "ok": true
     },
     {
@@ -136,6 +166,8 @@
       "expected": 5600.0,
       "actual": 5600.0,
       "tolerance": "exact",
+      "expected_unit": "vacancies x1",
+      "actual_unit": "vacancies x1",
       "ok": true
     },
     {
@@ -144,6 +176,8 @@
       "expected": 21.73913043478261,
       "actual": 21.73913043478261,
       "tolerance": "closed_form",
+      "expected_unit": "percent x1",
+      "actual_unit": "percent x1",
       "ok": true
     },
     {
@@ -152,6 +186,8 @@
       "expected": 4600.0,
       "actual": 4600.0,
       "tolerance": "exact",
+      "expected_unit": "vacancies x1",
+      "actual_unit": "vacancies x1",
       "ok": true
     },
     {
@@ -160,6 +196,8 @@
       "expected": 1100.0,
       "actual": 1100.0,
       "tolerance": "exact",
+      "expected_unit": "vacancies x1",
+      "actual_unit": "vacancies x1",
       "ok": true
     },
     {
@@ -168,6 +206,8 @@
       "expected": 5100.0,
       "actual": 5100.0,
       "tolerance": "exact",
+      "expected_unit": "vacancies x1",
+      "actual_unit": "vacancies x1",
       "ok": true
     },
     {
@@ -176,6 +216,8 @@
       "expected": 27.500000000000004,
       "actual": 27.500000000000004,
       "tolerance": "closed_form",
+      "expected_unit": "percent x1",
+      "actual_unit": "percent x1",
       "ok": true
     },
     {
@@ -184,6 +226,8 @@
       "expected": 4000.0,
       "actual": 4000.0,
       "tolerance": "exact",
+      "expected_unit": "vacancies x1",
+      "actual_unit": "vacancies x1",
       "ok": true
     },
     {
@@ -192,6 +236,28 @@
       "expected": 160.6015037593985,
       "actual": 160.60150375939975,
       "tolerance": "estimator",
+      "expected_unit": "vacancies_per_year x1",
+      "actual_unit": "vacancies_per_year x1",
+      "ok": true
+    },
+    {
+      "computation": "C09",
+      "field": "slope_ci_high",
+      "expected": 1197.3832968630165,
+      "actual": 1197.3832968630213,
+      "tolerance": "estimator",
+      "expected_unit": "vacancies_per_year x1",
+      "actual_unit": "vacancies_per_year x1",
+      "ok": true
+    },
+    {
+      "computation": "C09",
+      "field": "slope_ci_low",
+      "expected": -876.1802893442203,
+      "actual": -876.1802893442218,
+      "tolerance": "estimator",
+      "expected_unit": "vacancies_per_year x1",
+      "actual_unit": "vacancies_per_year x1",
       "ok": true
     },
     {
@@ -200,6 +266,8 @@
       "expected": 20.0,
       "actual": 20.0,
       "tolerance": "exact",
+      "expected_unit": "pairs x1",
+      "actual_unit": "pairs x1",
       "ok": true
     },
     {
@@ -208,6 +276,8 @@
       "expected": 0.46771700851419795,
       "actual": 0.4677170085141979,
       "tolerance": "estimator",
+      "expected_unit": "correlation x1",
+      "actual_unit": "correlation x1",
       "ok": true
     },
     {
@@ -216,6 +286,8 @@
       "expected": 0.47120816284266964,
       "actual": 0.47120816284266953,
       "tolerance": "estimator",
+      "expected_unit": "correlation x1",
+      "actual_unit": "correlation x1",
       "ok": true
     },
     {
@@ -224,6 +296,8 @@
       "expected": 19.0,
       "actual": 19.0,
       "tolerance": "exact",
+      "expected_unit": "pairs x1",
+      "actual_unit": "pairs x1",
       "ok": true
     },
     {
@@ -232,6 +306,8 @@
       "expected": 0.3598075606260415,
       "actual": 0.3598075606260416,
       "tolerance": "estimator",
+      "expected_unit": "correlation x1",
+      "actual_unit": "correlation x1",
       "ok": true
     },
     {
@@ -240,6 +316,8 @@
       "expected": 0.3104962969613563,
       "actual": 0.3104962969613564,
       "tolerance": "estimator",
+      "expected_unit": "correlation x1",
+      "actual_unit": "correlation x1",
       "ok": true
     },
     {
@@ -248,6 +326,8 @@
       "expected": 4.228215989817086,
       "actual": 4.228215989817086,
       "tolerance": "closed_form",
+      "expected_unit": "percent_per_year x1",
+      "actual_unit": "percent_per_year x1",
       "ok": true
     }
   ],
@@ -285,141 +365,175 @@
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "kind_allowed",
         "checks_fired": [
           "kind_allowed"
-        ]
+        ],
+        "misattributed": []
       },
       "association_strength": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "strength_rule",
         "checks_fired": [
           "strength_rule"
-        ]
+        ],
+        "misattributed": []
       },
       "causal_hedged": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "no_causal_language",
         "checks_fired": [
           "no_causal_language",
           "safe_prose"
-        ]
+        ],
+        "misattributed": []
       },
       "causal_unhedged": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "no_causal_language",
         "checks_fired": [
           "no_causal_language",
           "safe_prose"
-        ]
+        ],
+        "misattributed": []
       },
       "fabricated_literal": {
         "cases": 3,
         "detected": 3,
         "recall": 1.0,
+        "expected_check": "no_free_numbers",
         "checks_fired": [
           "no_free_numbers",
           "safe_prose"
-        ]
+        ],
+        "misattributed": []
       },
       "level_as_change": {
         "cases": 3,
         "detected": 3,
         "recall": 1.0,
+        "expected_check": "predicate_fit",
         "checks_fired": [
           "predicate_fit"
-        ]
+        ],
+        "misattributed": []
       },
       "longer_interval": {
         "cases": 3,
         "detected": 3,
         "recall": 1.0,
+        "expected_check": "interval_equality",
         "checks_fired": [
           "interval_equality"
-        ]
+        ],
+        "misattributed": []
       },
       "narrative_causal": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "no_causal_language",
         "checks_fired": [
           "no_causal_language"
-        ]
+        ],
+        "misattributed": []
       },
       "narrative_fabricated_number": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "no_free_numbers",
         "checks_fired": [
           "no_free_numbers"
-        ]
+        ],
+        "misattributed": []
       },
       "parent_child_swap": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "identity_equality",
         "checks_fired": [
           "identity_equality"
-        ]
+        ],
+        "misattributed": []
       },
       "recommendation_with_figures": {
         "cases": 1,
         "detected": 1,
         "recall": 1.0,
+        "expected_check": "recommendation_has_no_figures",
         "checks_fired": [
           "kind_allowed",
           "recommendation_has_no_figures"
-        ]
+        ],
+        "misattributed": []
       },
       "shorter_interval": {
         "cases": 3,
         "detected": 3,
         "recall": 1.0,
+        "expected_check": "interval_equality",
         "checks_fired": [
           "interval_equality"
-        ]
+        ],
+        "misattributed": []
       },
       "tampered_lineage": {
         "cases": 2,
         "detected": 2,
         "recall": 1.0,
+        "expected_check": "identity_equality",
         "checks_fired": [
           "identity_equality"
-        ]
+        ],
+        "misattributed": []
       },
       "wrong_computation_ref": {
         "cases": 3,
         "detected": 3,
         "recall": 1.0,
+        "expected_check": "resolution",
         "checks_fired": [
           "resolution"
-        ]
+        ],
+        "misattributed": []
       },
       "wrong_direction": {
         "cases": 5,
         "detected": 5,
         "recall": 1.0,
+        "expected_check": "sign_rule",
         "checks_fired": [
           "sign_rule"
-        ]
+        ],
+        "misattributed": []
       },
       "wrong_metric": {
         "cases": 3,
         "detected": 3,
         "recall": 1.0,
+        "expected_check": "metric_equality",
         "checks_fired": [
           "metric_equality"
-        ]
+        ],
+        "misattributed": []
       },
       "wrong_unit_or_field": {
         "cases": 4,
         "detected": 4,
         "recall": 1.0,
+        "expected_check": "predicate_fit",
         "checks_fired": [
           "predicate_fit"
-        ]
+        ],
+        "misattributed": []
       }
     },
     "recall": 1.0,

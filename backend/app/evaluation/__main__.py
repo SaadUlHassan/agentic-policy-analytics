@@ -75,7 +75,8 @@ def markdown(result: dict[str, Any]) -> str:
         ],
         "",
         f"**Computation accuracy:** {sum(f['ok'] for f in fields)}/{len(fields)} result fields within "
-        f"tolerance across {len({f['computation'] for f in fields})} golden computations.",
+        f"tolerance and in the expected unit and scale, across {len({f['computation'] for f in fields})} "
+        "golden computations.",
         "",
         f"**Refusal correctness:** {sum(r['ok'] for r in refusals)}/{len(refusals)} "
         f"({', '.join(f'{r["refusal"]} {r["actual"]}' for r in refusals)}).",
@@ -84,18 +85,23 @@ def markdown(result: dict[str, Any]) -> str:
         f"precision {adv['precision']:.0%}; {adv['controls']} valid controls, false-positive rate "
         f"{adv['false_positive_rate']:.0%}.",
         "",
-        "| Category | Detected | Checks that fired |",
-        "|---|---|---|",
+        "A case counts as detected only when the rule it breaks rejected it.",
+        "",
+        "| Category | Rule that must reject it | Detected | Checks that fired |",
+        "|---|---|---|---|",
         *[
-            f"| {name.replace('_', ' ')} | {c['detected']}/{c['cases']} | {', '.join(c['checks_fired'])} |"
+            f"| {name.replace('_', ' ')} | {c['expected_check']} | {c['detected']}/{c['cases']} "
+            f"| {', '.join(c['checks_fired'])} |"
             for name, c in adv["categories"].items()
         ],
     ]
     failing = [f for f in fields if not f["ok"]]
     if failing:
-        lines += ["", "## Fields outside tolerance", ""]
+        lines += ["", "## Fields that do not match", ""]
         lines += [
-            f"- {f['computation']}.{f['field']}: expected {f['expected']}, got {f['actual']}" for f in failing
+            f"- {f['computation']}.{f['field']}: expected {f['expected']} ({f['expected_unit']}), "
+            f"got {f['actual']} ({f['actual_unit']})"
+            for f in failing
         ]
     return "\n".join(lines) + "\n"
 

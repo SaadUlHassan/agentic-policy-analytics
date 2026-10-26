@@ -13,15 +13,16 @@
 version: 1
 
 series:
-  ict_employment_level: {dataset: M182841, key: "M182841:3.4@SSIC2020", source_row: "3.4", frequency: annual, scale: 1000}
-  ict_employment_change: {dataset: M183891, key: "M183891:1.2.4@SSIC2020", source_row: "1.2.4", frequency: quarterly, scale: 1}
-  ict_vacancies: {dataset: M184071, key: "M184071:1.2.4@SSIC2020", source_row: "1.2.4", frequency: quarterly, scale: 1}
-  it_services_vacancies: {dataset: M184071, key: "M184071:1.2.4.2@SSIC2020", source_row: "1.2.4.2", frequency: quarterly, scale: 1}
+  ict_employment_level: {dataset: M182841, key: "M182841:3.4@SSIC2020", source_row: "3.4", frequency: annual, unit: persons, scale: 1000}
+  ict_employment_change: {dataset: M183891, key: "M183891:1.2.4@SSIC2020", source_row: "1.2.4", frequency: quarterly, unit: persons, scale: 1}
+  ict_vacancies: {dataset: M184071, key: "M184071:1.2.4@SSIC2020", source_row: "1.2.4", frequency: quarterly, unit: vacancies, scale: 1}
+  it_services_vacancies: {dataset: M184071, key: "M184071:1.2.4.2@SSIC2020", source_row: "1.2.4.2", frequency: quarterly, unit: vacancies, scale: 1}
   ict_vacancies_annual_average:
     dataset: d_01966fdb498fa7fa2863635e25539693
     key: "d_01966fdb498fa7fa2863635e25539693:information and communications@SSIC2020"
     source_row: information and communications
     frequency: annual
+    unit: vacancies
     scale: 1
 
 computations:

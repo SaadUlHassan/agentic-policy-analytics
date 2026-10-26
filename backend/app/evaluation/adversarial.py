@@ -28,6 +28,28 @@ CONTROL = "valid_control"
 NARRATIVE_CONTROL = "valid_narrative"
 MAX_FALSE_POSITIVE_RATE = 0.05
 
+# The rule each corruption breaks. A case counts as detected only when that rule rejected it: a
+# rejection for some other reason would hide a broken check behind a green gate.
+EXPECTED_CHECK = {
+    "wrong_computation_ref": "resolution",
+    "wrong_metric": "metric_equality",
+    "shorter_interval": "interval_equality",
+    "longer_interval": "interval_equality",
+    "level_as_change": "predicate_fit",
+    "wrong_unit_or_field": "predicate_fit",
+    "wrong_direction": "sign_rule",
+    "association_strength": "strength_rule",
+    "association_from_descriptive": "kind_allowed",
+    "fabricated_literal": "no_free_numbers",
+    "causal_unhedged": "no_causal_language",
+    "causal_hedged": "no_causal_language",
+    "tampered_lineage": "identity_equality",
+    "parent_child_swap": "identity_equality",
+    "recommendation_with_figures": "recommendation_has_no_figures",
+    "narrative_fabricated_number": "no_free_numbers",
+    "narrative_causal": "no_causal_language",
+}
+
 
 @dataclass(frozen=True)
 class Case:
@@ -402,6 +424,10 @@ def evaluate(cases: list[Case], computations: dict[str, Computation]) -> list[Ou
     return out
 
 
+def _detected(outcome: Outcome) -> bool:
+    return EXPECTED_CHECK[outcome.case.category] in outcome.failed_checks
+
+
 def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
     by_category: dict[str, list[Outcome]] = defaultdict(list)
     for o in outcomes:
@@ -410,12 +436,19 @@ def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
     for category, items in sorted(by_category.items()):
         if items[0].case.valid:
             continue
-        detected = sum(o.rejected for o in items)
+        rule = EXPECTED_CHECK[category]
+        detected = sum(_detected(o) for o in items)
         categories[category] = {
             "cases": len(items),
             "detected": detected,
             "recall": detected / len(items),
+            "expected_check": rule,
             "checks_fired": sorted({check for o in items for check in o.failed_checks}),
+            "misattributed": [
+                {"case": o.case.description, "failed_checks": o.failed_checks}
+                for o in items
+                if o.rejected and not _detected(o)
+            ],
         }
     controls = [o for o in outcomes if o.case.valid]
     false_positives = [o for o in controls if o.rejected]
@@ -424,8 +457,8 @@ def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
         "controls": len(controls),
         "corrupted": len(corrupted),
         "categories": categories,
-        "recall": sum(o.rejected for o in corrupted) / len(corrupted),
-        "precision": sum(o.rejected for o in corrupted) / max(1, sum(o.rejected for o in outcomes)),
+        "recall": sum(_detected(o) for o in corrupted) / len(corrupted),
+        "precision": sum(_detected(o) for o in corrupted) / max(1, sum(o.rejected for o in outcomes)),
         "false_positive_rate": len(false_positives) / len(controls),
         "false_positives": [
             {"case": o.case.description, "failed_checks": o.failed_checks} for o in false_positives

@@ -7,6 +7,7 @@ raw payloads.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,11 +22,17 @@ Series = dict[str, tuple[SeriesInput, SeriesData]]
 
 @dataclass(frozen=True)
 class FieldCheck:
+    """One result field against its independent expectation: value within tolerance, and the same
+    unit and scale (a right number in the wrong unit is a wrong number). A field the expectation does
+    not have, or one the result lacks, fails."""
+
     computation: str
     field: str
-    expected: float
+    expected: float | None
     actual: float | None
     tolerance: str
+    expected_unit: str | None
+    actual_unit: str | None
     ok: bool
 
 
@@ -46,9 +53,15 @@ def run_spec(toolkit: Toolkit, spec: dict[str, Any], series: Series) -> Computat
 
 
 def _agrees(actual: float, value: float, tolerance: str) -> bool:
+    """Exact, or within the declared relative tolerance of the expected value (never an absolute
+    floor: correlations are below one, where an absolute 1e-6 would allow a larger relative error)."""
     if tolerance == "exact":
         return actual == value
-    return abs(actual - value) <= TOLERANCES[tolerance] * max(1.0, abs(value))
+    return math.isclose(actual, value, rel_tol=TOLERANCES[tolerance], abs_tol=0.0)
+
+
+def _unit(unit: str | None, scale: int | None) -> str | None:
+    return None if unit is None else f"{unit} x{scale}"
 
 
 def check_computations(series: Series) -> list[FieldCheck]:
@@ -56,14 +69,30 @@ def check_computations(series: Series) -> list[FieldCheck]:
     out = []
     for cid, spec in golden()["computations"].items():
         result = run_spec(toolkit, spec, series)
-        for name, want in expected()["computations"][cid]["fields"].items():
-            got = (
-                result.result[name].value
-                if isinstance(result, Computation) and name in result.result
-                else None
+        fields = result.result if isinstance(result, Computation) else {}
+        wanted = expected()["computations"][cid]["fields"]
+        for name in sorted(set(wanted) | set(fields)):
+            want, got = wanted.get(name), fields.get(name)
+            expected_unit = _unit(want["unit"], want["scale"]) if want else None
+            actual_unit = _unit(got.unit, got.scale) if got else None
+            ok = (
+                want is not None
+                and got is not None
+                and expected_unit == actual_unit
+                and _agrees(got.value, want["value"], want["tolerance"])
             )
-            ok = got is not None and _agrees(got, want["value"], want["tolerance"])
-            out.append(FieldCheck(cid, name, want["value"], got, want["tolerance"], ok))
+            out.append(
+                FieldCheck(
+                    cid,
+                    name,
+                    want["value"] if want else None,
+                    got.value if got else None,
+                    want["tolerance"] if want else "unexpected field",
+                    expected_unit,
+                    actual_unit,
+                    ok,
+                )
+            )
     return out
 
 

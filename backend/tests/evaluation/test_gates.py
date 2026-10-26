@@ -6,31 +6,18 @@ import ast
 
 import pytest
 
+from app.analytics.results import Computation
 from app.evaluation.__main__ import expectations_are_current
 from app.evaluation.accuracy import check_computations, check_refusals
-from app.evaluation.adversarial import CONTROL, NARRATIVE_CONTROL, build_cases, evaluate, summarise
+from app.evaluation.adversarial import (
+    CONTROL,
+    EXPECTED_CHECK,
+    NARRATIVE_CONTROL,
+    build_cases,
+    evaluate,
+    summarise,
+)
 from app.evaluation.golden import golden_dir, golden_series
-
-# The rule each corruption must be caught by: detection for the wrong reason is not detection.
-EXPECTED_CHECK = {
-    "wrong_computation_ref": "resolution",
-    "wrong_metric": "metric_equality",
-    "shorter_interval": "interval_equality",
-    "longer_interval": "interval_equality",
-    "level_as_change": "predicate_fit",
-    "wrong_unit_or_field": "predicate_fit",
-    "wrong_direction": "sign_rule",
-    "association_strength": "strength_rule",
-    "association_from_descriptive": "kind_allowed",
-    "fabricated_literal": "no_free_numbers",
-    "causal_unhedged": "no_causal_language",
-    "causal_hedged": "no_causal_language",
-    "tampered_lineage": "identity_equality",
-    "parent_child_swap": "identity_equality",
-    "recommendation_with_figures": "recommendation_has_no_figures",
-    "narrative_fabricated_number": "no_free_numbers",
-    "narrative_causal": "no_causal_language",
-}
 
 
 @pytest.fixture
@@ -93,3 +80,84 @@ async def test_valid_controls_pass_and_the_gate_holds(series):
     cases, computations = build_cases(series)
     summary = summarise(evaluate(cases, computations))
     assert summary["false_positives"] == [] and summary["gate_passed"]
+
+
+# -- the gates fail when the thing they guard breaks -------------------------------------------------
+
+
+def _mutating(monkeypatch, tool: str, mutate) -> None:
+    from app.analytics.tools import Toolkit
+
+    original = getattr(Toolkit, tool)
+
+    def wrapped(self, *args, **kwargs):
+        result = original(self, *args, **kwargs)
+        if isinstance(result, Computation):
+            result = result.model_copy(deep=True)
+            mutate(result)
+        return result
+
+    monkeypatch.setattr(Toolkit, tool, wrapped)
+
+
+async def test_a_relative_error_above_tolerance_below_one_fails(monkeypatch, series):
+    # r ~ 0.47: an absolute 1e-6 would pass this; the declared relative 1e-6 must not.
+    _mutating(
+        monkeypatch,
+        "correlate",
+        lambda c: setattr(c.result["pearson_r"], "value", c.result["pearson_r"].value + 8e-7),
+    )
+    failing = {(f.computation, f.field) for f in check_computations(series) if not f.ok}
+    assert failing == {("C10", "pearson_r"), ("C11", "pearson_r")}
+
+
+async def test_a_wrong_confidence_interval_fails(monkeypatch, series):
+    _mutating(
+        monkeypatch,
+        "trend",
+        lambda c: c.result.get("slope_ci_high") and setattr(c.result["slope_ci_high"], "value", 1e99),
+    )
+    failing = {(f.computation, f.field) for f in check_computations(series) if not f.ok}
+    assert failing == {("C09", "slope_ci_high")}
+
+
+async def test_a_right_number_in_the_wrong_scale_fails(monkeypatch, series):
+    def thousands_dropped(c):
+        for f in c.result.values():
+            if f.scale == 1000:
+                f.scale = 1  # "22.7 thousand persons" would render as "23 persons"
+
+    _mutating(monkeypatch, "change_between", thousands_dropped)
+    failing = [f for f in check_computations(series) if not f.ok]
+    assert {f.computation for f in failing} == {"C01", "C04"}  # yoy_change is a change_between
+    assert all(f.expected_unit == "persons x1000" and f.actual_unit == "persons x1" for f in failing)
+
+
+async def test_an_extra_unexpected_field_fails(monkeypatch, series):
+    _mutating(monkeypatch, "cagr", lambda c: c.result.update(extra=c.result["cagr_pct"]))
+    failing = {(f.computation, f.field, f.tolerance) for f in check_computations(series) if not f.ok}
+    assert failing == {("C02", "extra", "unexpected field"), ("C12", "extra", "unexpected field")}
+
+
+async def test_a_rejection_by_the_wrong_rule_is_not_detection(monkeypatch, series):
+    from app.evaluation import adversarial
+
+    original = adversarial.verify_claim
+
+    def causal_check_broken(claim, computations):
+        verdict = original(claim, computations)
+        checks = [
+            c.model_copy(update={"passed": True}) if c.name == "no_causal_language" else c
+            for c in verdict.checks
+        ]
+        return verdict.model_copy(update={"checks": checks, "passed": all(c.passed for c in checks)})
+
+    monkeypatch.setattr(adversarial, "verify_claim", causal_check_broken)
+    cases, computations = build_cases(series)
+    summary = summarise(evaluate(cases, computations))
+
+    # Still rejected (by safe_prose), but not by the causal check: the gate must notice.
+    for category in ("causal_hedged", "causal_unhedged"):
+        assert summary["categories"][category]["detected"] == 0
+        assert len(summary["categories"][category]["misattributed"]) == 2
+    assert not summary["gate_passed"]

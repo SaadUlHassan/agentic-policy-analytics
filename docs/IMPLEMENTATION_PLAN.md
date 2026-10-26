@@ -1082,14 +1082,18 @@ All of the following was verified live: the example query on Bedrock primary, on
   - 12 queries for the live runs (F2).
   - No recruitment-rate computation is included, because M184021 has no identified ICT series in the snapshots.
 - **Tolerances** follow §8.3: exact for integer arithmetic on source values, a relative 1e-9 for closed-form formulas, and 1e-6 for estimators.
+  - The tolerance is strictly relative: an absolute floor would loosen it for correlations, which are below one.
+  - Every field must also be in the expected unit and scale, derived independently from what it measures, so a right number in the wrong unit fails.
+  - A computation must produce exactly the expected set of fields: a missing or unexpected field fails.
+- **The quarterly trend's HAC interval is checked too.** The script computes Newey-West bounds itself (Bartlett kernel, lags equal to periods per year, no small-sample correction, normal critical value) and matches the application to about 1e-15.
 - **The adversarial suite** has 25 valid controls (20 claims and 5 narrative sentences) and 44 corrupted cases in 17 categories, all bound to real computations.
-  - Detection must come from the rule each corruption breaks: e.g. a wrong direction must fail `sign_rule`, not some other check.
+  - Detection must come from the rule each corruption breaks: e.g. a wrong direction must fail `sign_rule`, not some other check. The runtime gate enforces this, not only the tests, and reports any misattributed rejection.
   - This caught a bug in the suite itself during development: every case first failed `resolution`, controls included, which would have reported 100% recall with an 80% false-positive rate.
   - Unsupported narrative additions with no numbers or causal words need the LLM judge, so they are measured in the live evaluation.
 - **The golden check found an error in a test fixture.** `ICT_EMPLOYMENT` in the analytics unit tests was labelled as real M182841 values, but four of its six years differed from the published figures (e.g. 2022 was 176.4; SingStat publishes 187.8). It now holds the published values.
 
 **Results (snapshots of 25 Oct 2026):**
-- computation accuracy 30/30 fields within tolerance;
+- computation accuracy 32/32 fields within tolerance and in the expected unit and scale;
 - refusal correctness 4/4;
 - adversarial recall 100% in every category, precision 100%, false-positive rate 0%.
 
