@@ -45,7 +45,7 @@ Hallucination is prevented by construction where possible and detected where not
 ### By construction: numbers can't be invented
 
 - **The LLM never writes a number.** Analytics drafts a claim by choosing a predicate from a closed registry (`change.increase`, `cagr.growth`, `assoc.positive`, …) and binding it to a field of a stored, deterministic computation. The platform renders the sentence from the predicate's template, so the number in the text is the number in the computation.
-- **Citations are derived from lineage,** never written by a model: dataset version, series, periods, platform, origin agency, URLs and retrieval time come from the computation's inputs.
+- **Citations are derived from lineage,** never written by a model: the dataset version, series, periods, platform, origin agency, human URL and retrieval time come from the computation's inputs (the API URL of each version is in the JSON export bundle).
 
 ### Detected deterministically: 14 checks on every claim
 
@@ -102,7 +102,7 @@ Real providers on snapshot data, in an isolated database and Redis. 12 golden qu
 | Direction agreement across repeat runs | Target 100% | 100% | 100% |
 | Active time p50 / p95 | Reported | 45 s / 54 s | 71 s / 160 s |
 
-**Provider resilience scenarios** (all passed): fallback Bedrock → OpenAI; fallback OpenAI → Bedrock; the verifier's provider unavailable (disclosed as not independent); the primary lost mid-run; a total outage before a plan (fails clearly with `LLM_UNAVAILABLE`); a total outage after verified findings (report keeps the findings, with no generated narrative). Partial-stream failure doesn't apply: model output isn't streamed.
+**Provider resilience scenarios** (all passed): fallback Bedrock → OpenAI; fallback OpenAI → Bedrock; the verifier's provider unavailable (disclosed as not independent); the primary lost mid-run; a total outage at the start, before any finding is verified (fails clearly with `LLM_UNAVAILABLE`); a total outage after the first verified finding (ends `completed_with_limitations` with the findings and no generated narrative). Partial-stream failure doesn't apply: model output isn't streamed.
 
 **Target misses and what was done.** The three misses (series identities, relevance, and one unexpected clarification on G09) were traced to five product issues: the Coordinator couldn't see which planned items still lacked a series; the plan's period wasn't checked against the question; Extraction's rejection reasons never reached the report; totals over annual flows read like year-to-year changes; and long clarification lists were cut off. All five were fixed in PR #10, then the evaluation was rerun (commit `6b94d20`, `eval/results/live/` on `main`):
 

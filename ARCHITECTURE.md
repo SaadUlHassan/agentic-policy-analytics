@@ -162,30 +162,32 @@ sequenceDiagram
 The central reliability rule: **an LLM never writes a number**. It chooses a predicate from a closed registry and binds it to a field of a stored computation; the platform renders the sentence and checks it.
 
 - **Predicates** (`grounding/predicates.py`): `level.at`, `change.increase`, `change.decrease`, `cagr.growth`, `cagr.decline`, `trend.upward`, `trend.downward`, `flow.at`, `flow.total`, `period.higher`, `period.lower`, `assoc.positive`, `assoc.negative`, `assoc.weak`. Each declares the tools and value kinds it may describe, a sign rule and a sentence template.
-- **A claim** is a kind (measured, comparison, association, recommendation, limitation), at most two assertions and an optional short lead-in (no digits). Each assertion names its predicate, computation, field, metric, series and interval.
+- **A claim** is a kind (measured, comparison, association, recommendation, limitation), one or two assertions, and optionally one lead-in from a fixed list ("Over the same period,", "Meanwhile,", "By comparison,", "In contrast,", "Separately,", "In addition,", "Overall,"). Each assertion names its predicate, computation, field, metric, series and interval. The claim's text is composed by the platform: the lead-in, then the assertions' rendered statements joined by "and".
 - **Deterministic checks** (`grounding/checks.py`), run on every claim:
 
-| Check | Rejects |
+| Check | Passes only when |
 |---|---|
-| `resolution` | A computation or field that doesn't exist in this analysis, or isn't eligible |
-| `predicate_fit` | A predicate used for a tool or value kind it doesn't describe (a level presented as a change, a coefficient as a measured change, a wrong unit or field) |
-| `metric_equality` | A value of one metric stated as another (employment level ≠ employment change ≠ vacancies) |
-| `identity_equality` | A series whose identity differs from the computation's inputs (parent and child sector swapped, tampered lineage) |
-| `interval_equality` | An interval that isn't exactly the computation's (a 2020–2024 change restated as 2023–2024) |
-| `sign_rule` | A direction the value contradicts (`change.increase` on a fall) |
-| `strength_rule` | An association called positive or negative with \|r\| < 0.3, or weak with \|r\| ≥ 0.3 |
-| `kind_allowed` | A claim kind the computation doesn't permit (association only from `correlate`) |
-| `slots_bound` | A template slot left unbound |
-| `no_free_numbers` | Any number outside the rendered assertions; years only when they are asserted interval endpoints |
-| `no_causal_language` | Causal wording (*caused, led to, drove, due to, because of, resulted in, impact of*), hedged or not |
-| `safe_prose` | Free text that fails the number or causal rules |
-| `recommendation_has_no_figures` | A recommendation that carries numbers |
-| `finding_has_evidence` | A finding with no assertion |
+| `resolution` | The assertion's computation exists among this analysis's stored computations and has the named field (refused requests never become computations) |
+| `predicate_fit` | The predicate is in the registry, and allows both the computation's tool and the field's value kind. This is what rejects a level presented as a change, a correlation coefficient as a measured change, or a percent-change field stated as a percentage-point one |
+| `metric_equality` | The assertion's metric equals the field's metric (employment level, employment change and vacancies are all different) |
+| `identity_equality` | The assertion's series key equals the key of the computation's first input series (for a correlation, the leading series). A parent/child swap or a tampered series reference fails |
+| `interval_equality` | The assertion's interval is exactly the field's interval, start and end (a 2020–2024 change can't be restated as 2023–2024) |
+| `sign_rule` | The value is strictly positive for a predicate that requires positive (`change.increase`, `cagr.growth`, `trend.upward`, `period.higher`, `assoc.positive`), or strictly negative for one that requires negative; zero satisfies neither |
+| `strength_rule` | For association predicates: \|r\| ≥ 0.3 for `assoc.positive` and `assoc.negative`, \|r\| < 0.3 for `assoc.weak` |
+| `kind_allowed` | The claim's kind is one the predicate allows, and an association claim rests on a computation whose interpretation is exploratory association (only `correlate` produces those) |
+| `slots_bound` | The text's placeholder slots are exactly the claim's assertions, none missing and none extra |
+| `safe_prose` | The text is exactly an allow-listed lead-in followed by the statements, in order. Any other wording, such as a negation ("It is false that …"), fails |
+| `no_free_numbers` | Outside the rendered statements, the text contains no number except a period that is an asserted interval endpoint, or the year of one |
+| `no_causal_language` | The text contains none of: *caused, causes, cause of, led to, leads to, drove, driven by, due to, because of, resulted in, result of, impact of, impacted, attributable to*, hedged or not |
+| `recommendation_has_no_figures` | A recommendation binds no computed values |
+| `finding_has_evidence` | Any claim other than a recommendation or limitation binds at least one computed value |
 
-- **Narrative checks.** The title, summary and limitations the Coordinator writes pass `no_free_numbers` and `no_causal_language`, then an LLM judge (on the other provider when it is healthy) flags sentences that overstate or aren't supported by the verified findings. A flagged summary gets one rewrite, then is omitted. Whether the judge was independent of the writer is recorded and disclosed.
-- **Citations are derived, never written.** Each finding's citations come from the lineage of its computations: dataset, version, series, periods, platform, origin agency, URLs and retrieval time.
+The first eight run per assertion; the rest per claim. A claim is retained only if every check passes.
+
+- **Narrative checks.** The title, summary and limitations the Coordinator writes must pass `no_free_numbers` (periods allowed only when they are endpoints of verified findings) and `no_causal_language`, then an LLM judge (on the other provider when it is healthy) flags sentences that overstate or aren't supported by the verified findings. A flagged summary gets one rewrite, then is omitted. Whether the judge was independent of the writer is recorded and disclosed.
+- **Citations are derived, never written.** Each finding's citations come from the lineage of its computations: dataset, version (artifact ID), title, publisher, origin agency, platform, series, periods, the dataset's human URL, retrieval time and whether it came from a snapshot. The API URL of each version is in the JSON export bundle.
 - **Failures.** A rejected claim goes back to Analytics with the reasons. Planned items that end without a verified finding become deterministic limitations that say why, computed from the fetched data ("M182841 has it only for 2008 to 2025, not for all of 1985 to 1990").
-- **Status.** `completed` when every planned item has a verified finding; `completed_with_limitations` when some have only a limitation. Only verified findings reach the dashboard and the exports, whatever the status.
+- **Status.** An analysis that reaches the report step is `completed` only when it has at least one verified finding, every planned sector × metric pair is covered by one, and the method policy refused nothing during the run. Any refusal (for example the `REFERENCE_MISMATCH` on an annual correlation), any uncovered planned pair, or no findings at all (an out-of-scope question) makes it `completed_with_limitations`, with the refusals and gaps listed as limitations. Only verified findings reach the dashboard and the exports, whatever the status.
 
 ## Data integration
 
@@ -208,7 +210,7 @@ Covered in detail in [DATA_SOURCES.md](DATA_SOURCES.md). In short:
 - **Circuit breaker** per provider: three consecutive failures open it for 60 s, and fallback events made while it is open still state the original failure.
 - **Normalisation.** Nova returns private `reasoning_content` blocks; the router strips them. Only tool arguments and text are used.
 - **Ledger.** Every call is recorded in `llm_calls`: provider, model, agent, purpose, tokens, latency, success, error and the provider it fell back from. Cost is computed from `LLM_PRICES` and shown only when every call's usage is known.
-- **Degraded modes.** Both providers down before a plan exists: the analysis fails with `LLM_UNAVAILABLE`, claiming nothing. Down after findings are verified: the report keeps the verified findings, with no generated title, summary or limitations.
+- **Degraded modes.** When the agents can't continue (both providers unavailable, the deadline spent, or the step limit hit), what happens depends on whether any finding was verified yet. None: the analysis fails with `LLM_UNAVAILABLE` (or `STEP_LIMIT`), claiming nothing. Some: it ends `completed_with_limitations` with the verified findings, a limitation saying it stopped early, and no generated title or summary.
 - **Offline mode.** With `LLM_MODE=offline` the router builds a deterministic stand-in for every model. It is refused in production and recorded in the ledger as `offline-<provider>`.
 
 ## Job lifecycle
@@ -221,10 +223,10 @@ stateDiagram-v2
   queued --> running: claim (lease, epoch + 1, intent acked)
   running --> awaiting_input: clarification interrupt (lease released)
   awaiting_input --> queued: answer or proceed (resume intent)
-  running --> queued: lease expired, attempts left (resume intent)
   running --> completed
   running --> completed_with_limitations
-  running --> failed: no plan possible, incompatible checkpoint or attempts exhausted
+  running --> running: lease expired, attempts left (resume intent, new claim)
+  running --> failed: agents stopped before a verified finding, internal error, incompatible checkpoint or attempts exhausted
   queued --> cancelled
   awaiting_input --> cancelled
   running --> cancelled: cancel requested, honoured at the next step
@@ -238,10 +240,21 @@ stateDiagram-v2
 - **Atomic claim.** A worker claims in one transaction: it takes a 60 s lease, sets `running`, increments the **execution epoch** (the fencing token) and the attempt, acknowledges its intent and supersedes every other open intent. A delivery whose intent is already acknowledged or superseded, or whose analysis is terminal or paused, exits without side effects.
 - **Fencing.** Every authoritative write (heartbeats, events, artifacts, computations, the report, status changes and LangGraph checkpoints) is conditioned on `execution_epoch = my_epoch`. A worker that lost its lease gets `LeaseLost` on its next write and stops. Checkpoint writes re-check the epoch under a per-analysis advisory lock in the same transaction, with `durability="sync"`, so a checkpoint can't land after the lease has moved.
 - **Two counters.** `outbox.delivery_generation` counts redeliveries of an intent nobody acknowledged; `analyses.attempt` counts executions that actually started. Only executions count against the limit of three, so queue loss can't exhaust the recovery budget.
-- **Reconciler** (every 15 s in every worker, safe to run concurrently with `SKIP LOCKED`): dispatches undispatched intents; redispatches intents dispatched but unacknowledged for 60 s; resumes running analyses whose lease expired, or fails them after three attempts (and bumps the epoch, so a late original worker stays fenced). It never touches terminal or paused analyses, and a healthy run keeps renewing its lease every 15 s.
+- **Reconciler** (every 15 s in every worker, safe to run concurrently with `SKIP LOCKED`): dispatches undispatched intents, and redispatches intents dispatched but unacknowledged for 60 s. For a running analysis whose lease expired and which has no open intent, it cancels it if cancellation was requested; otherwise it writes a resume intent while attempts remain, or fails it after three. **A recovered analysis stays `running` throughout:** the resume intent's claim takes a new lease and a new epoch, which fences the old worker. Ending it (cancelled or failed) bumps the epoch too. The reconciler never touches terminal or paused analyses, and a healthy run keeps renewing its lease every 15 s.
 - **Idempotent effects.** Computation IDs derive from a fingerprint of tool, method version, input artifacts and series identities, periods and options, so a step restarted after a crash reuses its rows (`UNIQUE (analysis_id, fingerprint)`). Artifacts are content-addressed. Events are unique on `(analysis_id, seq)`. The report and the terminal status commit together or not at all. LLM calls may repeat on resume; exactly-once billing is not promised.
-- **Clarification.** The graph interrupts; the worker sets `awaiting_input`, releases the lease and ends the job, and the deadline clock pauses. An answer is a conditional update on the clarification version plus a resume intent, in one transaction. A duplicate or stale answer is `409 CLARIFICATION_STALE`; answering an analysis that isn't paused is `409 NOT_AWAITING_INPUT`. The answer is keyed by the interrupt it answers, so it survives a crash of the worker that resumed it.
-- **Cancel.** Queued or paused: cancelled immediately. Running: `cancel_requested_at` is set and honoured at the next node or tool call; the final transitions re-check it under the row lock, so a late cancel still wins and the report is discarded. Terminal: `409 ALREADY_TERMINAL`. A clarify/cancel race has exactly one winner.
+- **Clarification.** The graph interrupts; the worker sets `awaiting_input`, releases the lease and ends the job, and the deadline clock pauses. An answer is accepted only by a conditional update (`status = 'awaiting_input'` and the submitted version equals the current one) that bumps the version, sets `queued` and writes a resume intent, in one transaction. A rejected answer gets the first matching error, in this order:
+  1. `404` when the analysis doesn't exist;
+  2. `409 ALREADY_TERMINAL` when it has finished or been cancelled;
+  3. `409 CLARIFICATION_STALE` when the version differs from the current one. This is also what a duplicate of an accepted answer gets, since acceptance bumped the version, even though the analysis is no longer paused;
+  4. `409 NOT_AWAITING_INPUT` otherwise (the right version, but the analysis isn't paused).
+
+  The answer is keyed by the interrupt it answers, so it survives a crash of the worker that resumed it.
+- **Cancel** always returns `202` for an analysis that is queued, paused or running, and records `cancel_requested_at`:
+  - **queued or paused:** it becomes `cancelled` at once, its open intents are superseded and a terminal event is written;
+  - **running:** it stays `running` until the worker reaches the next node or tool-call boundary and ends it as `cancelled`. The final transitions (pause, finish) re-check the request under the row lock, so a cancel after the last boundary still wins and the report is discarded. If the worker has died, the reconciler cancels it instead of resuming it;
+  - **terminal:** `409 ALREADY_TERMINAL`.
+
+  **Cancellation takes precedence over an answer.** If an answer lands first, the analysis is `queued` with a resume intent; the cancel then supersedes that intent, and a claim only succeeds on a queued or running analysis, so it never resumes. If the cancel lands first, the answer gets `409 ALREADY_TERMINAL`. Either way the analysis ends `cancelled`.
 - **Active-time budget.** Heartbeats add active time; pause and finish add the remainder. A recovered run is charged for the interval its crashed worker never reported, so recovery can't grant extra time.
 - **Checkpoint compatibility.** A checkpoint from an incompatible graph version is not resumed; the analysis fails with `INCOMPATIBLE_CHECKPOINT`.
 

@@ -26,7 +26,7 @@ Everything here is recorded machine-readably in [`data/manifest/sources.yaml`](d
 What each platform does that a connector has to handle:
 
 - **SingStat.** `limit` and `offset` count **data points, not rows**, and the server caps every page at 5,000 points whatever `limit` asks for. A series can be split across pages, so the connector merges fragments by `seriesNo` and stops at a short page. Values are strings, and the sector hierarchy is encoded in `seriesNo` (`1.2.4` is Information & Communications, `1.2.4.2` its IT subsector). Every response carries a fresh `dateGenerated`, so raw bytes change daily for unchanged data.
-- **Data.gov.sg.** The CSV download is one rate-limited request instead of one per 1,000 datastore records. It returns a pre-signed S3 URL that is used once and never stored; the download is identified by its `poll-download` URL. An over-limit datastore call was observed returning a body without `result` rather than an HTTP 429, so both are treated as throttling.
+- **Data.gov.sg.** A CSV download is one `initiate-download` request and then up to six `poll-download` requests, 2 s apart, until the file is ready, all counted against the downloads limit. The final poll returns a pre-signed S3 URL, fetched once (S3 is not rate-limited) and never stored; the download is identified by its `poll-download` URL. The datastore instead needs one request per 1,000 records against the datastore limit. Each fetch also makes one metadata request, spaced on the datastore limit. An over-limit datastore call was observed returning a body without `result` rather than an HTTP 429, so both are treated as throttling.
 - **MOM.** File names embed the release date (`mrsd_4_annl_emp_chg_by_ind_20032026.xlsx` is the 20 March 2026 release), so files are **discovered on every fetch**: the index page is scanned for the dataset's stable prefix and the newest release wins. If the page is down or no longer links the dataset, the last-known URL in the catalogue is used and a `DISCOVERY_FALLBACK` warning is disclosed. Workbooks carry one sheet per SSIC edition; only the `SSIC2020` sheet is read.
 
 ## Catalogued datasets
@@ -45,7 +45,7 @@ Nine datasets, all originated by MOM. "Mirror" means the same statistic republis
 | **mrsd_4_annl_emp_chg_by_ind** Annual Employment Change by Industry (SSIC 2020) | MOM | Change between consecutive year-end levels | Annual | thousand persons, to 0.1 | SSIC 2020 from 2009 | — |
 | **mrsd_3_qtly_emp_chg_by_ind** Quarterly Employment Change by Industry (SSIC 2020) | MOM | Change between consecutive quarter-end levels | Quarterly | thousand persons, to 0.1 | SSIC 2020 from 2009-Q1 | of M183891 |
 
-**Human-readable links:** SingStat tables at `https://tablebuilder.singstat.gov.sg/table/TS/{id}` (for example [M182841](https://tablebuilder.singstat.gov.sg/table/TS/M182841)); Data.gov.sg datasets at `https://data.gov.sg/datasets/{id}/view`; MOM files on the [employment time-series page](https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx). Every report citation carries both the human and the API URL of the exact dataset version used.
+**Human-readable links:** SingStat tables at `https://tablebuilder.singstat.gov.sg/table/TS/{id}` (for example [M182841](https://tablebuilder.singstat.gov.sg/table/TS/M182841)); Data.gov.sg datasets at `https://data.gov.sg/datasets/{id}/view`; MOM files on the [employment time-series page](https://stats.mom.gov.sg/Pages/EmploymentTimeSeries.aspx). Every report citation carries the human URL of the dataset it cites, with the dataset version (artifact ID) and retrieval time. The API URL each version was fetched from is in the JSON export bundle, under `datasets[].url_api`, alongside the raw payload hashes.
 
 **Supported domain:** the Singapore labour market by industry at national level: employment levels and changes, job vacancies and recruitment rates. Questions outside it (housing prices, health, forecasts beyond the data) are declined with a clear explanation, never answered with unrelated data.
 
@@ -119,14 +119,22 @@ Several datasets republish the same MOM statistic. A mirror on a second platform
 
 ## Rate limits and API keys
 
-| Platform | Published limits per 10 s | How they are applied |
+| Platform and endpoint | Limit used per 10 s | Requests it covers |
 |---|---|---|
-| Data.gov.sg datastore | 4 without a key, 8 with a dev key, 20 with a prod key | Shared across all workers through Redis (`SET NX PX` on the next slot), spaced 10% inside the limit |
-| Data.gov.sg downloads | 2 / 4 / 10 | As above |
-| SingStat | none published | Not spaced |
-| MOM | none published | One request a second, shared across workers like Data.gov.sg's |
+| Data.gov.sg datastore | 4 without a key; 8 or 20 with a key, by `DATAGOV_KEY_TIER` (`dev` or `prod`) | Datastore pages and metadata requests |
+| Data.gov.sg downloads | 2 without a key; 4 or 10 with a key | `initiate-download` and each `poll-download` |
+| MOM | 10 (one a second) | Index page, workbook and CSV |
+| SingStat | not spaced | — |
 
-Every request gets up to three attempts with increasing backoff, then falls back to its snapshot when one exists. Without Redis, each process spaces its own requests at twice the interval. `DATAGOV_API_KEY` is sent as `x-api-key`, only to `data.gov.sg` hosts, and `DATAGOV_KEY_TIER` selects the limits. A free key is recommended for live demos.
+**Where these numbers come from.** The Data.gov.sg figures are the limits its developer guide ("API Rate Limits") published when this was built; MOM and SingStat publish none, so MOM is given one request a second as a courtesy. They are configuration in the connectors (`DATASTORE`, `DOWNLOADS`, `POLITE`), not values read from the platforms, and Data.gov.sg may change them.
+
+**What the spacing guarantees, and what it doesn't.**
+- Each slot is 10% longer than the published rate allows, so the platform stays below the limit rather than at it.
+- **Shared only through one Redis.** Every worker using the same Redis takes slots from one schedule (`SET NX PX` on the next slot). Processes on separate Redis instances don't coordinate. If Redis can't be reached, each process falls back to its own schedule at twice the interval, so a few processes stay under the limit but many could exceed it together.
+- **Only this platform's own requests are counted.** Other software calling Data.gov.sg from the same address, or with the same key, draws on the same allowance without the spacing knowing. An over-limit response is still handled: an HTTP 429 or 5xx, or a datastore body without `result` (observed when keyless), is retried.
+- **Retries take slots too.** Every request gets up to three attempts with increasing backoff, each waiting for its own slot. After that the request falls back to its snapshot when one exists, and the report discloses it.
+
+**API key.** `DATAGOV_API_KEY` is sent as `x-api-key`, only to `data.gov.sg` and its subdomains (never to the pre-signed S3 URL), and `DATAGOV_KEY_TIER` must match the tier the key was issued for, since it sets the spacing. A free key is recommended for live demos.
 
 ## Adding a dataset or a source
 

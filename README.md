@@ -93,16 +93,27 @@ The backend reads `.env` from the repository root. Without `DATABASE_URL` and `R
 
 Everything below except `make eval-live` and `make probe` is offline: no LLM calls, no spend.
 
+**Host tools.** Unlike `make up`, these commands run on the host, so they need the native toolchain from [Running without Docker](#running-without-docker): Python 3.12 with uv, Node 22, and the installed dependencies.
+
+```bash
+(cd backend && uv sync)
+(cd frontend && npm ci)
+(cd frontend && npx playwright install chromium)   # browser tests only
+docker compose up -d postgres redis                # integration tests and the live evaluation
+```
+
+The integration tests and the live evaluation use the compose Postgres and Redis on `localhost:5432` and `localhost:6379`. They create their own databases (`policy_test`, `policy_eval`) and Redis databases (15, 14), so they never touch the app's data. If you changed `POSTGRES_PORT` or `REDIS_PORT`, point them there with `TEST_DATABASE_URL` / `TEST_REDIS_URL` (`EVAL_DATABASE_URL` / `EVAL_REDIS_URL` for the live evaluation). When Postgres or Redis can't be reached, the integration tests are **skipped**, not failed; set `REQUIRE_INTEGRATION=1` to make that an error, as CI does.
+
 | Command | What it runs | Needs |
 |---|---|---|
-| `make test` | 359 backend tests (unit, integration, evaluation) and 31 frontend tests | Postgres and Redis for the integration tests (`docker compose up -d postgres redis`) |
-| `make coverage` | The same, with coverage; backend core packages are gated at 80% (currently 94%) | as above |
-| `make eval` | Deterministic gates: golden computations against independently computed values, refusal correctness, the adversarial verifier suite. Writes `eval/results/deterministic.{json,md}` | nothing |
-| `make e2e` | Playwright browser tests at 375, 768 and 1280 px against an isolated offline stack (ports 8200/3200), torn down afterwards | Docker |
-| `make load` | The 5-minute load run against the offline stack. Writes `eval/results/load/load.{json,md}` | Docker |
-| `make lint`, `make typecheck` | ruff and ESLint; mypy and `tsc` | — |
-| `make eval-live` | Live golden runs on both provider orders, consistency, provider resilience, LLM-judge suite. Writes `eval/results/live/` | Credentials; **spends LLM calls** |
-| `make probe` | Capability probe of the configured models (tool call, structured output, a ReAct turn, streaming) | Credentials |
+| `make test` | 359 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
+| `make coverage` | The same, with coverage; backend core packages are gated at 80% (currently 94%) | as `make test` |
+| `make eval` | Deterministic gates: golden computations against independently computed values, refusal correctness, the adversarial verifier suite. Writes `eval/results/deterministic.{json,md}` | uv dependencies only |
+| `make e2e` | Playwright browser tests at 375, 768 and 1280 px against an isolated offline stack (ports 8200/3200), torn down afterwards | Docker, Node dependencies and Playwright's Chromium |
+| `make load` | The 5-minute load run against the offline stack. Writes `eval/results/load/load.{json,md}` | Docker and uv dependencies |
+| `make lint`, `make typecheck` | ruff and ESLint; mypy and `tsc` | uv and Node dependencies |
+| `make eval-live` | Live golden runs on both provider orders, consistency, provider resilience, LLM-judge suite. Writes `eval/results/live/` | uv dependencies, Postgres and Redis, credentials; **spends LLM calls** |
+| `make probe` | Capability probe of the configured models (tool call, structured output, a ReAct turn, streaming) | uv dependencies and credentials |
 
 CI (GitHub Actions) runs lint, types, all tests, the coverage gate, the evaluation gates, a secret scan, compose smoke tests of the development and production configurations, the browser tests and a 30-second load smoke on every pull request and on pushes to `main` and `v*` tags. On those pushes it then publishes the images to GHCR.
 
@@ -187,8 +198,8 @@ The reasoning behind each design decision is in [ARCHITECTURE.md](ARCHITECTURE.m
 - **A port is already in use:** change `WEB_PORT`, `API_PORT`, `POSTGRES_PORT` or `REDIS_PORT` in `.env`. If you change `API_PORT`, rebuild the web image (`make up` does).
 - **An analysis fails with `LLM_UNAVAILABLE`:** neither provider answered. Check the credentials, or run with `LLM_MODE=offline`. `make probe` shows what each configured model can do.
 - **Bedrock says the model is not available:** request model access in the Bedrock console for your region, or set `BEDROCK_MODEL_ID` to a model you have access to and re-run `make probe`.
-- **Data.gov.sg is slow:** without an API key its published limits are a few requests per 10 seconds, shared across workers. Register a free key (`DATAGOV_API_KEY`) or use `DATA_MODE=snapshot`.
-- **Integration tests are skipped:** they need Postgres and Redis on the default ports; `docker compose up -d postgres redis`.
+- **Data.gov.sg is slow:** without an API key it allows only a few requests per 10 seconds, and the platform spaces its requests to stay inside that (see [DATA_SOURCES.md](DATA_SOURCES.md#rate-limits-and-api-keys)). Register a free key (`DATAGOV_API_KEY`) or use `DATA_MODE=snapshot`.
+- **Integration tests are skipped:** they need Postgres and Redis reachable at `localhost:5432` and `localhost:6379` (`docker compose up -d postgres redis`), or at `TEST_DATABASE_URL` / `TEST_REDIS_URL`. `REQUIRE_INTEGRATION=1` turns a skip into a failure.
 
 ## Further documentation
 
