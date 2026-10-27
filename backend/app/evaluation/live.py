@@ -556,7 +556,8 @@ async def _main(args: argparse.Namespace) -> int:
     summary = summarise(out)
     _write_json(out / "live.json", summary)
     (out / "live.md").write_text(markdown(summary))
-    if (out / "runs.jsonl").exists():
+    if "golden" in args.phases and not args.rescore:
+        # Only new golden runs get a new sheet: a re-score must not wipe the reviewer's marks.
         (out / "relevance_review.md").write_text(relevance_sheet(out))
     print(markdown(summary))
     return 0 if summary["hard_gates_passed"] else 1
