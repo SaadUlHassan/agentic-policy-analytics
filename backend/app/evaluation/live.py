@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import statistics
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
@@ -364,6 +365,12 @@ def summarise(out: Path) -> dict[str, Any]:
             r["recall"] >= judge_suite.TARGET_RECALL and not r["unjudged"] for r in judged["results"]
         )
         summary["judge"] = [{k: v for k, v in r.items() if k != "verdicts"} for r in judged["results"]]
+    if (relevance := relevance_tally(out)) is not None:
+        # A human's marks; an unmarked or doubly marked entry is not counted as relevant.
+        targets["human_relevance"] = all(
+            t["relevant"] >= MIN_RELEVANT and not t["unmarked"] for t in relevance.values()
+        )
+        summary["relevance"] = relevance
     summary["gates"], summary["targets"] = gates, targets
     summary["hard_gates_passed"] = bool(gates) and all(gates.values())
     return summary
@@ -481,6 +488,19 @@ def markdown(summary: dict[str, Any]) -> str:
                 )
             )
             lines.append(f"| {r['name'].replace('_', ' ')} | {r['expected']} | {result} |")
+    if relevance := summary.get("relevance"):
+        lines += [
+            "",
+            "## Human relevance review",
+            "",
+            "| Primary provider | Relevant | Not relevant | Unmarked |",
+        ]
+        lines += ["|---|---|---|---|"]
+        lines += [
+            f"| {o} | {t['relevant']}/{t['entries']} | {', '.join(t['not_relevant']) or 'none'} "
+            f"| {', '.join(t['unmarked']) or 'none'} |"
+            for o, t in relevance.items()
+        ]
     if judges := summary.get("judge"):
         lines += [
             "",
@@ -498,6 +518,36 @@ def markdown(summary: dict[str, Any]) -> str:
                 f"| {'; '.join(missed) or 'none'} |"
             )
     return "\n".join(lines) + "\n"
+
+
+_ENTRY = re.compile(r"(?m)^(?=## G\d\d \()")
+_HEADING = re.compile(r"## (G\d\d) \((\w+) primary\)")
+
+
+def relevance_tally(out: Path) -> dict[str, dict[str, Any]] | None:
+    """The reviewer's marks on relevance_review.md per primary provider, or None before review."""
+    path = out / "relevance_review.md"
+    if not path.exists():
+        return None
+    tally: dict[str, dict[str, Any]] = {}
+    for entry in _ENTRY.split(path.read_text())[1:]:
+        heading = _HEADING.match(entry)
+        if heading is None:
+            continue
+        relevant = bool(re.search(r"(?m)^- \[[xX]\] Relevant", entry))
+        not_relevant = bool(re.search(r"(?m)^- \[[xX]\] Not relevant", entry))
+        t = tally.setdefault(
+            heading.group(2), {"entries": 0, "relevant": 0, "not_relevant": [], "unmarked": []}
+        )
+        t["entries"] += 1
+        if relevant == not_relevant:
+            t["unmarked"].append(heading.group(1))
+        elif relevant:
+            t["relevant"] += 1
+        else:
+            t["not_relevant"].append(heading.group(1))
+    reviewed = any(t["relevant"] or t["not_relevant"] for t in tally.values())
+    return tally if reviewed else None
 
 
 def relevance_sheet(out: Path) -> str:
@@ -534,6 +584,7 @@ def relevance_sheet(out: Path) -> str:
         if s["summary"]:
             lines.append(f"Summary: {s['summary']}")
         lines += ["", "Findings:", *([f"- {t}" for t in s["findings"]] or ["- none"]), ""]
+        lines += ["Limitations:", *([f"- {t}" for t in s.get("limitations", [])] or ["- none"]), ""]
         lines += ["- [ ] Relevant", "- [ ] Not relevant. Why:", ""]
     return "\n".join(lines)
 

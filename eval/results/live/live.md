@@ -1,6 +1,6 @@
 # Live evaluation
 
-Generated 2026-10-27T12:45:17+00:00 from snapshot data with real providers.
+Generated 2026-10-27T13:54:15+00:00 from snapshot data with real providers.
 
 | Hard gate | Result |
 |---|---|
@@ -19,6 +19,7 @@ Generated 2026-10-27T12:45:17+00:00 from snapshot data with real providers.
 | consistency jaccard | pass |
 | direction agreement | pass |
 | qualitative recall | pass |
+| human relevance | **FAIL** |
 
 ## Golden runs
 
@@ -86,6 +87,13 @@ Mean pairwise Jaccard of selected series: 0.81.
 | total outage early | Both providers down from the start: failed with LLM_UNAVAILABLE, no plan, no report | pass (failed, answered by none) |
 | total outage late | Both providers lost after verified findings exist: completed with limitations, the verified findings without narrative, the early stop disclosed | pass (completed_with_limitations, answered by bedrock) |
 | partial stream failure | A provider failing mid-stream leaves no duplicated text | n/a: Model output is not streamed: every call returns a complete reply or fails, and only verified results are published (draft streaming, enhancement 5, is not built). |
+
+## Human relevance review
+
+| Primary provider | Relevant | Not relevant | Unmarked |
+|---|---|---|---|
+| bedrock | 9/12 | G02, G04, G09 | none |
+| openai | 11/12 | G12 | none |
 
 ## Qualitative judge
 

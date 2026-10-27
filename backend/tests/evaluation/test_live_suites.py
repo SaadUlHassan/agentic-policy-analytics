@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.evaluation import judge
+from app.evaluation import judge, live
 from app.evaluation.golden import golden_series
 from app.evaluation.resilience import scenarios
 
@@ -27,4 +27,25 @@ def test_every_resilience_scenario_is_checked_or_explained():
         "verifier_provider_unavailable",
         "total_outage_early",
         "total_outage_late",
+    }
+
+
+def test_the_relevance_tally_counts_only_single_marks(tmp_path):
+    def entry(query: str, relevant: str, not_relevant: str) -> str:
+        heading = f"## {query} (bedrock primary): q\n\n"
+        return heading + f"- [{relevant}] Relevant\n- [{not_relevant}] Not relevant. Why:\n\n"
+
+    sheet = tmp_path / "relevance_review.md"
+    sheet.write_text("# Relevance review\n\n" + entry("G01", " ", " ") + entry("G02", " ", " "))
+    assert live.relevance_tally(tmp_path) is None  # not reviewed yet
+
+    sheet.write_text(
+        "# Relevance review\n\n"
+        + entry("G01", "x", " ")
+        + entry("G02", " ", "x")
+        + entry("G03", " ", " ")
+        + entry("G04", "x", "x")
+    )
+    assert live.relevance_tally(tmp_path) == {
+        "bedrock": {"entries": 4, "relevant": 1, "not_relevant": ["G02"], "unmarked": ["G03", "G04"]}
     }

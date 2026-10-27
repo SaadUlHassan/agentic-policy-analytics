@@ -1136,11 +1136,12 @@ All of the following was verified live: the example query on Bedrock primary, on
 | Series identities, golden runs | T (≥11) | 10/12 | 10/12 |
 | Clarification only when ambiguous | T | G09 asked | none |
 | Judge recall / false positives (34/34 judged) | T (≥80%) | 100% / 0% | 100% / 0% |
+| Human relevance review | T (≥10) | 9/12 | 11/12 |
 | Active time p50 / p95 | T4 | 45 s / 54 s | 71 s / 160 s |
 
 - **Consistency:** the mean pairwise Jaccard of selected series is 0.81 (target 0.8). Across all six runs of each query, no finding stated a different direction for the same golden computation.
 - **All 278 stored computations** (8 tools) recompute exactly from the fetched series. All 14 golden computations made on a republication equal the expectation in base units.
-- **Cost:** about $14.50 for the 72 runs, at $0.80/$3.20 (Nova Pro) and $5/$30 (GPT-5.5) per million input/output tokens. Tokens: Nova 1.93M in / 0.10M out; GPT-5.5 1.46M in / 0.18M out. `LLM_PRICES` is not configured, so the app itself shows no cost.
+- **Cost:** about $14.50 for the 72 runs, at $0.80/$3.20 (Nova Pro) and $5/$30 (GPT-5.5) per million input/output tokens. Tokens: Nova 1.93M in / 0.10M out; GPT-5.5 1.46M in / 0.18M out. That is a lower bound: 4 calls (throttled or timed out) have unknown usage, so the summary reports the exact cost as unknown.
 - **Evidence-driven decisions** were made in runs without faults. Examples:
   - GPT-5.5's Extraction rejected the quarterly vacancy series for "annual vacancies" in G06.
   - It also rejected M182841 for 1985–1990 (G09) because the series starts in 2008.
@@ -1158,4 +1159,15 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **An ambiguous labour-market question is asked about, not refused.** Clarification options are capped at four: a longer list is shortened, never turned into a refusal. Prompt version 2.
 - **First-run problems were infrastructure, not the product.** The OpenAI account ran out of credits, and three concurrent runs throttled Bedrock. The live runner now runs the two provider orders side by side, one run at a time each, and reports the share of calls each primary answered (94% and 95%).
 
-**Still open:** the human relevance review (`eval/results/live/relevance_review.md`, target at least 10/12 per provider). A finding comparing two single-year windows renders as "in 2023 to 2023"; to be tidied in the renderer.
+**Human relevance review** (`eval/results/live/relevance_review.md`, target at least 10/12 per provider; the summary reads the reviewer's marks from the sheet):
+- **Results:** Bedrock 9/12 (target missed), OpenAI 11/12.
+- **Not relevant:** G02, G04 and G09 on Bedrock, and G12 on OpenAI.
+- **How it was done:** the development assistant proposed a verdict with a reason for each entry. The reviewer confirmed all 24 and marked the sheet.
+- **The sheet shows each report's limitations as well as its findings**, because that is where a refusal is explained.
+
+**Product issues the review found, which the automated gates do not catch** (next PR):
+- **G02:** a cumulative total of annual changes reads like a year-to-year change ("totalled +9.2 thousand between 2022 and 2023"). The narrative then said employment "showed a positive change" in a year it fell. Totals over annual flows need wording that names both years; and a finding comparing two single-year windows renders as "in 2023 to 2023".
+- **G04:** the plan's period is not checked against the question. A question about 2020 onwards got 2021–2025, and Bedrock then split the comparison at mid-2023 instead of mid-2022.
+- **G09:** Extraction's rejection reasons ("starts in 2008") never reach the report. When no finding covers a planned item, the reason should be a limitation.
+- **G08:** the option cap added in this PR keeps the first four options. When Nova listed 15 sectors, that dropped Information & Communications. A long list should go back to the model to choose from, not be cut off.
+- **G01 (and the series-identity misses):** the Coordinator needs to see which planned sector × metric pairs still lack a series.

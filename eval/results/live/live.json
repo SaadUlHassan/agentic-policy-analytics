@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T12:45:17+00:00",
+  "generated_at": "2026-10-27T13:54:15+00:00",
   "consistency": {
     "mean_jaccard": 0.8083333333333333,
     "per_query": {
@@ -826,6 +826,26 @@
       "unjudged": 0
     }
   ],
+  "relevance": {
+    "bedrock": {
+      "entries": 12,
+      "relevant": 9,
+      "not_relevant": [
+        "G02",
+        "G04",
+        "G09"
+      ],
+      "unmarked": []
+    },
+    "openai": {
+      "entries": 12,
+      "relevant": 11,
+      "not_relevant": [
+        "G12"
+      ],
+      "unmarked": []
+    }
+  },
   "gates": {
     "refusal_correctness": true,
     "retained_claim_correctness": true,
@@ -840,7 +860,8 @@
     "clarification_only_when_ambiguous": false,
     "consistency_jaccard": true,
     "direction_agreement": true,
-    "qualitative_recall": true
+    "qualitative_recall": true,
+    "human_relevance": false
   },
   "hard_gates_passed": true
 }

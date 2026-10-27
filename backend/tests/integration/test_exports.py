@@ -84,6 +84,9 @@ def test_export_before_a_report_exists_is_a_conflict(client):  # noqa: F811
 
 
 def test_usage_reports_calls_tokens_and_cost_only_when_priced(client, finished, monkeypatch):  # noqa: F811
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "llm_prices", {})  # whatever the developer's .env configures
     usage = client.get(f"/api/analyses/{finished}").json()["usage"]
     assert usage["llm_calls"] > 0 and usage["failed_calls"] == 0
     assert set(usage["providers"]) == {"bedrock", "openai"}

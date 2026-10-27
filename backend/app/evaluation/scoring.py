@@ -465,6 +465,7 @@ def score(
         "retained_failures": check_retained(stored),
         "findings": [f["text"] for f in findings],
         "summary": report.get("summary", ""),
+        "limitations": [lim["text"] for lim in report.get("limitations", [])],
         "narrative_removed": report.get("verification", {}).get("narrative_removed", []),
         "narrative_check": report.get("verification", {}).get("narrative_check"),
         "directions": directions(stored, golden_ids),
