@@ -167,3 +167,39 @@ def test_citations_come_from_computation_lineage():
     assert index.cite(claim_refs(_claim(), COMPUTATIONS)) == ["S1"]
     (citation,) = index.citations()
     assert citation.dataset_id == "M182841" and citation.periods == ["2020", "2024"]
+
+
+async def test_totals_read_as_sums_and_one_period_windows_as_that_period():
+    from app.analytics.tools import Toolkit
+    from app.data.taxonomy import get_taxonomy
+    from app.evaluation.golden import golden_series
+
+    series = (await golden_series())["ict_employment_change"]
+    toolkit = Toolkit(get_taxonomy().version)
+    total = toolkit.cumulative(*series, "2020-Q1", "2024-Q4")
+    compare = toolkit.compare_periods(*series, "2022-Q1", "2022-Q1", "2023-Q1", "2023-Q1")
+
+    def text(computation, field, predicate):
+        claim = Claim(
+            id="k",
+            kind=ClaimKind.COMPARISON,
+            text="{a1}",
+            assertions={
+                "a1": Assertion(
+                    predicate=predicate,
+                    computation_id=computation.id,
+                    field=field,
+                    metric=computation.result[field].metric,
+                    series_key=computation.inputs[0].series_key,
+                    interval=computation.result[field].interval,
+                )
+            },
+        )
+        return render_claim(claim, {computation.id: computation})
+
+    assert text(total, "total", "flow.total") == (
+        "Employment change in Information & Communications summed to +26,800 persons over 2020-Q1 to 2024-Q4"
+    )
+    difference = compare.result["difference"].value
+    predicate = "period.lower" if difference < 0 else "period.higher"
+    assert text(compare, "difference", predicate).endswith("in 2023-Q1 than in 2022-Q1")

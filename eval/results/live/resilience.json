@@ -2,7 +2,7 @@
   {
     "name": "fallback_bedrock_to_openai",
     "expected": "Bedrock switched off: every call answered by OpenAI, each fallback disclosed as injected",
-    "analysis_id": "9a6ba71f-25f6-4c98-a3c5-799af3703710",
+    "analysis_id": "b4ba49ba-8eaf-4796-8623-9f2701077f7c",
     "order": [
       "bedrock",
       "openai"
@@ -12,51 +12,27 @@
     ],
     "late_faults": [],
     "late_faults_after_seq": null,
-    "status": "completed_with_limitations",
-    "error": null,
-    "findings": 10,
-    "fallback_events": [
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai"
+    "status": "failed",
+    "error": {
+      "code": "LLM_UNAVAILABLE",
+      "detail": "bedrock: InjectedFault: bedrock switched off (injected fault (demo)); openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organizati"
+    },
+    "findings": 0,
+    "fallback_events": [],
+    "answered_by": [],
+    "failed_calls": 3,
+    "problems": [
+      "status failed",
+      "no verified findings",
+      "no fallback event naming the injected bedrock fault"
     ],
-    "answered_by": [
-      "openai"
-    ],
-    "failed_calls": 6,
-    "problems": [],
-    "passed": true
+    "passed": false,
+    "account_outage": true
   },
   {
     "name": "fallback_openai_to_bedrock",
     "expected": "OpenAI primary and switched off: every call answered by Bedrock",
-    "analysis_id": "020177a0-f55c-4065-95b6-556a7e62798e",
+    "analysis_id": "18b178f1-c30d-4340-ba9b-a24c8b582bee",
     "order": [
       "openai",
       "bedrock"
@@ -68,22 +44,8 @@
     "late_faults_after_seq": null,
     "status": "completed_with_limitations",
     "error": null,
-    "findings": 4,
+    "findings": 3,
     "fallback_events": [
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
-      "openai switched off (injected fault (demo)); answered by bedrock",
       "openai switched off (injected fault (demo)); answered by bedrock",
       "openai switched off (injected fault (demo)); answered by bedrock",
       "openai switched off (injected fault (demo)); answered by bedrock",
@@ -102,14 +64,15 @@
     "answered_by": [
       "bedrock"
     ],
-    "failed_calls": 5,
+    "failed_calls": 3,
     "problems": [],
-    "passed": true
+    "passed": true,
+    "account_outage": false
   },
   {
     "name": "verifier_provider_unavailable",
     "expected": "The judge's provider is down: the check runs on the writer's provider and is disclosed as not independent",
-    "analysis_id": "003ad586-61a3-4482-816b-7029dc1bd1fd",
+    "analysis_id": "13ec5872-a046-416c-8481-0cd0a277a8ea",
     "order": [
       "bedrock",
       "openai"
@@ -121,7 +84,7 @@
     "late_faults_after_seq": null,
     "status": "completed_with_limitations",
     "error": null,
-    "findings": 2,
+    "findings": 3,
     "fallback_events": [
       "openai switched off (injected fault (demo)); answered by bedrock"
     ],
@@ -130,12 +93,13 @@
     ],
     "failed_calls": 1,
     "problems": [],
-    "passed": true
+    "passed": true,
+    "account_outage": false
   },
   {
     "name": "primary_lost_mid_run",
     "expected": "Bedrock lost after the first verified finding: the run continues on OpenAI",
-    "analysis_id": "c53445fb-00f7-4ddd-9dc6-4fcd21e10cd7",
+    "analysis_id": "358426e3-9282-4f4d-b270-0639e947f5bf",
     "order": [
       "bedrock",
       "openai"
@@ -144,41 +108,25 @@
     "late_faults": [
       "llm:bedrock"
     ],
-    "late_faults_after_seq": 44,
+    "late_faults_after_seq": 66,
     "status": "completed_with_limitations",
     "error": null,
     "findings": 5,
-    "fallback_events": [
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai",
-      "bedrock switched off (injected fault (demo)); answered by openai"
-    ],
+    "fallback_events": [],
     "answered_by": [
-      "bedrock",
-      "openai"
+      "bedrock"
     ],
     "failed_calls": 3,
-    "problems": [],
-    "passed": true
+    "problems": [
+      "no fallback after the fault"
+    ],
+    "passed": false,
+    "account_outage": true
   },
   {
     "name": "total_outage_early",
     "expected": "Both providers down from the start: failed with LLM_UNAVAILABLE, no plan, no report",
-    "analysis_id": "e0276549-7657-4598-a2c3-27f3355de8a5",
+    "analysis_id": "49e8f03f-7fa3-40d1-9421-a535a5f21642",
     "order": [
       "bedrock",
       "openai"
@@ -199,12 +147,13 @@
     "answered_by": [],
     "failed_calls": 2,
     "problems": [],
-    "passed": true
+    "passed": true,
+    "account_outage": false
   },
   {
     "name": "total_outage_late",
     "expected": "Both providers lost after verified findings exist: completed with limitations, the verified findings without narrative, the early stop disclosed",
-    "analysis_id": "a962c16c-9385-4a7c-9896-10bad6b2aede",
+    "analysis_id": "f9a34dd2-05c9-4a6a-b01e-711e14b545de",
     "order": [
       "bedrock",
       "openai"
@@ -214,17 +163,18 @@
       "llm:bedrock",
       "llm:openai"
     ],
-    "late_faults_after_seq": 93,
+    "late_faults_after_seq": 61,
     "status": "completed_with_limitations",
     "error": null,
-    "findings": 4,
+    "findings": 3,
     "fallback_events": [],
     "answered_by": [
       "bedrock"
     ],
     "failed_calls": 2,
     "problems": [],
-    "passed": true
+    "passed": true,
+    "account_outage": false
   },
   {
     "name": "partial_stream_failure",

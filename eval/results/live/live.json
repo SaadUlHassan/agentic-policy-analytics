@@ -1,96 +1,92 @@
 {
-  "generated_at": "2026-10-27T14:14:40+00:00",
+  "generated_at": "2026-10-27T16:30:29+00:00",
   "consistency": {
-    "mean_jaccard": 0.8083333333333333,
+    "mean_jaccard": 0.8888888888888888,
     "per_query": {
       "G01": {
-        "runs": 6,
-        "jaccard": 0.3,
+        "runs": 4,
+        "jaccard": 0.6666666666666666,
         "direction_conflicts": {}
       },
       "G02": {
-        "runs": 6,
-        "jaccard": 0.4666666666666667,
+        "runs": 4,
+        "jaccard": 0.3333333333333333,
         "direction_conflicts": {}
       },
       "G03": {
-        "runs": 6,
+        "runs": 4,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G04": {
-        "runs": 6,
+        "runs": 4,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G05": {
-        "runs": 6,
+        "runs": 4,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G06": {
-        "runs": 6,
+        "runs": 4,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G07": {
-        "runs": 6,
-        "jaccard": 0.5666666666666667,
+        "runs": 3,
+        "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G08": {
-        "runs": 6,
+        "runs": 4,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G09": {
-        "runs": 6,
+        "runs": 3,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G10": {
-        "runs": 6,
+        "runs": 4,
         "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G11": {
-        "runs": 6,
-        "jaccard": 0.5333333333333333,
+        "runs": 3,
+        "jaccard": 1.0,
         "direction_conflicts": {}
       },
       "G12": {
-        "runs": 6,
-        "jaccard": 0.8333333333333334,
+        "runs": 3,
+        "jaccard": 0.6666666666666666,
         "direction_conflicts": {}
       }
     }
   },
   "runs": 72,
+  "evaluated_runs": 44,
   "per_order": {
     "bedrock": {
       "queries": 12,
       "refusal_correct": 12,
       "refusal_problems": {},
-      "identities_correct": 10,
+      "identities_correct": 11,
       "identity_misses": {
-        "G01": [
-          "ict_employment_change"
-        ],
         "G02": [
           "mrsd_4_annl_emp_chg_by_ind:J58-63 Information & Communications@SSIC2020"
         ]
       },
-      "golden_computations": "7/13",
-      "unexpected_clarifications": [
-        "G09"
-      ],
-      "active_s_p50": 44.872,
-      "active_s_p95": 53.705,
-      "calls_per_run": 18.5,
-      "answered_by_primary": 0.9369369369369369,
+      "golden_computations": "10/13",
+      "unexpected_clarifications": [],
+      "active_s_p50": 38.421,
+      "active_s_p95": 42.676,
+      "calls_per_run": 16,
+      "answered_by_primary": 0.9114583333333334,
       "statuses": {
-        "completed_with_limitations": 5,
-        "completed": 6,
+        "completed_with_limitations": 4,
+        "completed": 7,
         "awaiting_input": 1
       }
     },
@@ -98,22 +94,18 @@
       "queries": 12,
       "refusal_correct": 12,
       "refusal_problems": {},
-      "identities_correct": 10,
+      "identities_correct": 11,
       "identity_misses": {
-        "G07": [
-          "d_01966fdb498fa7fa2863635e25539693:it and other information services@SSIC2020",
-          "ict_vacancies_annual_average"
-        ],
         "G12": [
           "ict_vacancies"
         ]
       },
-      "golden_computations": "6/13",
+      "golden_computations": "8/13",
       "unexpected_clarifications": [],
-      "active_s_p50": 70.796,
-      "active_s_p95": 160.447,
-      "calls_per_run": 16.833333333333332,
-      "answered_by_primary": 0.9504950495049505,
+      "active_s_p50": 77.256,
+      "active_s_p95": 113.56,
+      "calls_per_run": 16.166666666666668,
+      "answered_by_primary": 0.9481865284974094,
       "statuses": {
         "completed": 7,
         "completed_with_limitations": 4,
@@ -124,430 +116,143 @@
   "retained_failures": [],
   "computation_mismatches": [],
   "refusal_correct_all_runs": {
-    "bedrock": "36/36",
-    "openai": "36/36"
+    "bedrock": "25/26",
+    "openai": "18/18"
   },
-  "republished_computations": [
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 0,
-      "computation": "C05",
-      "fields": {
-        "total": [
-          26800.0,
-          26800.0
-        ]
-      }
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 0,
-      "computation": "C10",
-      "fields": {
-        "pairs": [
-          20.0,
-          20.0
-        ],
-        "pearson_r": [
-          0.46771700851419795,
-          0.46771700851419795
-        ],
-        "spearman_rho": [
-          0.47120816284266964,
-          0.47120816284266953
-        ]
-      }
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 0,
-      "computation": "C11",
-      "fields": {
-        "pairs": [
-          19.0,
-          19.0
-        ],
-        "pearson_r": [
-          0.3598075606260415,
-          0.3598075606260417
-        ],
-        "spearman_rho": [
-          0.3104962969613563,
-          0.3104962969613564
-        ]
-      }
-    },
-    {
-      "query": "G12",
-      "order": "bedrock",
-      "run": 0,
-      "computation": "C05",
-      "fields": {
-        "total": [
-          26800.0,
-          26800.0
-        ]
-      }
-    },
-    {
-      "query": "G12",
-      "order": "bedrock",
-      "run": 0,
-      "computation": "C10",
-      "fields": {
-        "pairs": [
-          20.0,
-          20.0
-        ],
-        "pearson_r": [
-          0.46771700851419795,
-          0.46771700851419795
-        ],
-        "spearman_rho": [
-          0.47120816284266964,
-          0.47120816284266953
-        ]
-      }
-    },
-    {
-      "query": "G12",
-      "order": "bedrock",
-      "run": 0,
-      "computation": "C11",
-      "fields": {
-        "pairs": [
-          19.0,
-          19.0
-        ],
-        "pearson_r": [
-          0.3598075606260415,
-          0.3598075606260417
-        ],
-        "spearman_rho": [
-          0.3104962969613563,
-          0.3104962969613564
-        ]
-      }
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 1,
-      "computation": "C05",
-      "fields": {
-        "total": [
-          26800.0,
-          26800.0
-        ]
-      }
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 1,
-      "computation": "C06",
-      "fields": {
-        "difference": [
-          -2600.0,
-          -2599.9999999999995
-        ],
-        "mean_a": [
-          2640.0,
-          2639.9999999999995
-        ],
-        "mean_b": [
-          40.0,
-          40.00000000000008
-        ]
-      }
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 1,
-      "computation": "C10",
-      "fields": {
-        "pairs": [
-          20.0,
-          20.0
-        ],
-        "pearson_r": [
-          0.46771700851419795,
-          0.46771700851419795
-        ],
-        "spearman_rho": [
-          0.47120816284266964,
-          0.47120816284266953
-        ]
-      }
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "run": 1,
-      "computation": "C11",
-      "fields": {
-        "pairs": [
-          19.0,
-          19.0
-        ],
-        "pearson_r": [
-          0.3598075606260415,
-          0.3598075606260417
-        ],
-        "spearman_rho": [
-          0.3104962969613563,
-          0.3104962969613564
-        ]
-      }
-    },
-    {
-      "query": "G07",
-      "order": "bedrock",
-      "run": 2,
-      "computation": "C07",
-      "fields": {
-        "abs_change": [
-          1000.0,
-          1000.0
-        ],
-        "end_value": [
-          5600.0,
-          5600.0
-        ],
-        "pct_change": [
-          21.73913043478261,
-          21.73913043478261
-        ],
-        "start_value": [
-          4600.0,
-          4600.0
-        ]
-      }
-    },
-    {
-      "query": "G07",
-      "order": "bedrock",
-      "run": 2,
-      "computation": "C08",
-      "fields": {
-        "abs_change": [
-          1100.0,
-          1100.0
-        ],
-        "end_value": [
-          5100.0,
-          5100.0
-        ],
-        "pct_change": [
-          27.500000000000004,
-          27.500000000000004
-        ],
-        "start_value": [
-          4000.0,
-          4000.0
-        ]
-      }
-    },
-    {
-      "query": "G07",
-      "order": "bedrock",
-      "run": 2,
-      "computation": "C09",
-      "fields": {
-        "slope": [
-          160.6015037593985,
-          160.60150375939975
-        ],
-        "slope_ci_high": [
-          1197.3832968630165,
-          1197.3832968630213
-        ],
-        "slope_ci_low": [
-          -876.1802893442203,
-          -876.1802893442218
-        ]
-      }
-    },
-    {
-      "query": "G07",
-      "order": "bedrock",
-      "run": 2,
-      "computation": "C12",
-      "fields": {
-        "cagr_pct": [
-          4.228215989817086,
-          4.228215989817086
-        ]
-      }
-    }
-  ],
+  "republished_computations": [],
   "evidence_driven_decisions": [
     {
+      "query": "G09",
+      "order": "bedrock",
+      "agent": "extraction",
+      "decision": "rejected a candidate series",
+      "detail": "Rejected M182841:3.4@SSIC2020: Missing data for the years 1985 to 1990."
+    },
+    {
+      "query": "G09",
+      "order": "bedrock",
+      "agent": "coordinator",
+      "decision": "requested more evidence",
+      "detail": "employment_level in info_comms"
+    },
+    {
+      "query": "G09",
+      "order": "bedrock",
+      "agent": "extraction",
+      "decision": "rejected a candidate series",
+      "detail": "Rejected M182841:3.4@SSIC2020: The series does not cover the years 1985 to 1990."
+    },
+    {
       "query": "G01",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
-    },
-    {
-      "query": "G02",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
-    },
-    {
-      "query": "G03",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute the compound annual growth rate of employment in the Information & Communications sector between 2020 and 2024"
-    },
-    {
-      "query": "G04",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
-    },
-    {
-      "query": "G05",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
-    },
-    {
-      "query": "G06",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute the correlation between annual employment in the Information & Communications sector and annual ICT job vacancies from 2020 to 2024."
-    },
-    {
-      "query": "G07",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
-    },
-    {
-      "query": "G11",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
-    },
-    {
-      "query": "G12",
-      "order": "bedrock",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "compute statistics on the selected series and draft findings"
+      "order": "openai",
+      "agent": "extraction",
+      "decision": "rejected a candidate series",
+      "detail": "Rejected M183891:1@SSIC2020: This series is quarterly employment change, not annual year-end employment level, so it cannot provide comparable All industries levels for 2020 to 2024."
     },
     {
       "query": "G06",
       "order": "openai",
       "agent": "extraction",
       "decision": "rejected a candidate series",
-      "detail": "Rejected M184071:1.2.4@SSIC2020: Although it measures the correct SSIC 2020 Information & Communications job vacancy stock and covers 2020-Q1 to 2024-Q4, it is quarterly rather than annual, and the annual average-of-quarter-ends series is available for direct annual comparison."
-    },
-    {
-      "query": "G06",
-      "order": "openai",
-      "agent": "coordinator",
-      "decision": "requested more analysis",
-      "detail": "Recompute the annual comparison using the verified employment and vacancy series, explicitly annualising quarterly vacancy observations with a documented method, aligning both series to the same year labels, and then calculate the correlation and draft findings."
+      "detail": "Rejected M184071:1.2.4@SSIC2020: This series measures Information & Communications job vacancies but is quarterly quarter-end data rather than the planned annual frequency."
     },
     {
       "query": "G09",
       "order": "openai",
       "agent": "extraction",
       "decision": "rejected a candidate series",
-      "detail": "Rejected M182841:3.4@SSIC2020: This annual employment-level series is the correct sector and metric, but it starts in 2008 and has no observations for 1985\u20131990."
+      "detail": "Rejected M182841:3.4@SSIC2020: This series measures annual year-end employment for Information & Communications but starts only in 2008, so it does not cover 1985 to 1990."
+    },
+    {
+      "query": "G09",
+      "order": "openai",
+      "agent": "extraction",
+      "decision": "rejected a candidate series",
+      "detail": "Rejected mrsd_4_annl_emp_chg_by_ind:J58-63 Information & Communications@SSIC2020: This series is annual employment change rather than employment level and starts in 2009, so it does not satisfy the 1985 to 1990 year-end employment-level requirement."
     },
     {
       "query": "G09",
       "order": "openai",
       "agent": "coordinator",
       "decision": "requested more evidence",
-      "detail": "Find and validate an appropriate Singapore employment-level dataset or series for the Information & Communications industry covering 1985 to 1990, checking whether older industry classifications or linked historical series are required."
+      "detail": "Find and validate an available year-end employment_level series for the info_comms sector covering 1985 to 1990, or determine after this extraction round whether employment_level in info_comms is unavailable in the accessible datasets."
     },
     {
       "query": "G09",
       "order": "openai",
       "agent": "extraction",
       "decision": "rejected a candidate series",
-      "detail": "Rejected M182841:3.4@SSIC2020: This annual employment-level series starts in 2008, so it is missing every requested year from 1985 to 1990."
+      "detail": "Rejected M182841:3.4@SSIC2020: This annual year-end employment_level series measures Information & Communications but starts in 2008, so all requested years 1985 to 1990 are missing."
     },
     {
       "query": "G12",
       "order": "openai",
       "agent": "extraction",
       "decision": "rejected a candidate series",
-      "detail": "Rejected M184021:1@SSIC2020: This series is all industries rather than SSIC 2020 Information & Communications, so it does not fit the planned sector despite covering the quarterly recruitment-rate metric."
+      "detail": "Rejected M184021:1@SSIC2020: This series is total all industries, not Information & Communications, so it does not fit the planned sector."
     },
     {
       "query": "G12",
       "order": "openai",
       "agent": "extraction",
       "decision": "rejected a candidate series",
-      "detail": "Rejected M184021:1.4.4@SSIC2020: Rows 1.4.4, 2.4.4, 3.4.4, and 4.4.4 all map to Information & Communications by occupational group, so no single unambiguous sector-level series could be selected."
+      "detail": "Rejected M184021:1.4.4@SSIC2020: The fetched dataset flags the Information & Communications recruitment-rate rows as ambiguous across multiple occupational-group rows, so this candidate cannot be validated as the planned all-occupation industry series."
+    },
+    {
+      "query": "G12",
+      "order": "openai",
+      "agent": "extraction",
+      "decision": "rejected a candidate series",
+      "detail": "Rejected M184021:2.4.4@SSIC2020: This candidate is one of several ambiguous Information & Communications recruitment-rate rows and cannot be validated as the planned all-occupation industry series."
     },
     {
       "query": "G12",
       "order": "openai",
       "agent": "coordinator",
       "decision": "requested more evidence",
-      "detail": "Find and validate the quarterly Information & Communications recruitment-rate series for 2020\u20132024, and confirm it is comparable with the already selected job-vacancies series in industry classification and frequency."
+      "detail": "Find and validate a quarterly recruitment_rate series for info_comms, mapped to Information & Communications under SSIC 2020 if available; if unavailable after searching, document that unavailability clearly."
     },
     {
       "query": "G12",
       "order": "openai",
       "agent": "extraction",
       "decision": "rejected a candidate series",
-      "detail": "Rejected M184021:2.4.4@SSIC2020: This row is an Information & Communications recruitment rate for a specific occupational group rather than the all-occupations industry rate required for the plan."
+      "detail": "Rejected M184021:1@SSIC2020: This series is All industries, not Information & Communications, so it does not fit the planned info_comms recruitment-rate metric."
     },
     {
       "query": "G12",
       "order": "openai",
-      "agent": "extraction",
-      "decision": "rejected a candidate series",
-      "detail": "Rejected M184021:3.4.4@SSIC2020: This row is an Information & Communications recruitment rate for a specific occupational group rather than the all-occupations industry rate required for the plan."
-    },
-    {
-      "query": "G12",
-      "order": "openai",
-      "agent": "extraction",
-      "decision": "rejected a candidate series",
-      "detail": "Rejected M184021:4.4.4@SSIC2020: This row is an Information & Communications recruitment rate for a specific occupational group rather than the all-occupations industry rate required for the plan."
+      "agent": "coordinator",
+      "decision": "requested more analysis",
+      "detail": "Assess whether the available ICT job vacancies series alone can support any partial findings, and clearly identify the recruitment_rate in info_comms finding as unavailable due to lack of a selected series."
     }
   ],
   "cost": {
     "tokens_by_model": {
       "apac.amazon.nova-pro-v1:0": [
-        1929684,
-        100257
+        1917223,
+        96007
       ],
       "gpt-5.5": [
-        1455073,
-        178846
+        676069,
+        81693
       ]
     },
     "usd": null,
     "priced": false,
-    "calls_without_usage": 4
+    "calls_without_usage": 142
+  },
+  "replaced": {
+    "runs": [],
+    "scenarios": [],
+    "judges": []
   },
   "unscored": [],
   "resilience": [
     {
       "name": "fallback_bedrock_to_openai",
       "expected": "Bedrock switched off: every call answered by OpenAI, each fallback disclosed as injected",
-      "analysis_id": "9a6ba71f-25f6-4c98-a3c5-799af3703710",
+      "analysis_id": "b4ba49ba-8eaf-4796-8623-9f2701077f7c",
       "order": [
         "bedrock",
         "openai"
@@ -557,51 +262,27 @@
       ],
       "late_faults": [],
       "late_faults_after_seq": null,
-      "status": "completed_with_limitations",
-      "error": null,
-      "findings": 10,
-      "fallback_events": [
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai"
+      "status": "failed",
+      "error": {
+        "code": "LLM_UNAVAILABLE",
+        "detail": "bedrock: InjectedFault: bedrock switched off (injected fault (demo)); openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organizati"
+      },
+      "findings": 0,
+      "fallback_events": [],
+      "answered_by": [],
+      "failed_calls": 3,
+      "problems": [
+        "status failed",
+        "no verified findings",
+        "no fallback event naming the injected bedrock fault"
       ],
-      "answered_by": [
-        "openai"
-      ],
-      "failed_calls": 6,
-      "problems": [],
-      "passed": true
+      "passed": false,
+      "account_outage": true
     },
     {
       "name": "fallback_openai_to_bedrock",
       "expected": "OpenAI primary and switched off: every call answered by Bedrock",
-      "analysis_id": "020177a0-f55c-4065-95b6-556a7e62798e",
+      "analysis_id": "18b178f1-c30d-4340-ba9b-a24c8b582bee",
       "order": [
         "openai",
         "bedrock"
@@ -613,22 +294,8 @@
       "late_faults_after_seq": null,
       "status": "completed_with_limitations",
       "error": null,
-      "findings": 4,
+      "findings": 3,
       "fallback_events": [
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
-        "openai switched off (injected fault (demo)); answered by bedrock",
         "openai switched off (injected fault (demo)); answered by bedrock",
         "openai switched off (injected fault (demo)); answered by bedrock",
         "openai switched off (injected fault (demo)); answered by bedrock",
@@ -647,14 +314,15 @@
       "answered_by": [
         "bedrock"
       ],
-      "failed_calls": 5,
+      "failed_calls": 3,
       "problems": [],
-      "passed": true
+      "passed": true,
+      "account_outage": false
     },
     {
       "name": "verifier_provider_unavailable",
       "expected": "The judge's provider is down: the check runs on the writer's provider and is disclosed as not independent",
-      "analysis_id": "003ad586-61a3-4482-816b-7029dc1bd1fd",
+      "analysis_id": "13ec5872-a046-416c-8481-0cd0a277a8ea",
       "order": [
         "bedrock",
         "openai"
@@ -666,7 +334,7 @@
       "late_faults_after_seq": null,
       "status": "completed_with_limitations",
       "error": null,
-      "findings": 2,
+      "findings": 3,
       "fallback_events": [
         "openai switched off (injected fault (demo)); answered by bedrock"
       ],
@@ -675,12 +343,13 @@
       ],
       "failed_calls": 1,
       "problems": [],
-      "passed": true
+      "passed": true,
+      "account_outage": false
     },
     {
       "name": "primary_lost_mid_run",
       "expected": "Bedrock lost after the first verified finding: the run continues on OpenAI",
-      "analysis_id": "c53445fb-00f7-4ddd-9dc6-4fcd21e10cd7",
+      "analysis_id": "358426e3-9282-4f4d-b270-0639e947f5bf",
       "order": [
         "bedrock",
         "openai"
@@ -689,41 +358,25 @@
       "late_faults": [
         "llm:bedrock"
       ],
-      "late_faults_after_seq": 44,
+      "late_faults_after_seq": 66,
       "status": "completed_with_limitations",
       "error": null,
       "findings": 5,
-      "fallback_events": [
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai",
-        "bedrock switched off (injected fault (demo)); answered by openai"
-      ],
+      "fallback_events": [],
       "answered_by": [
-        "bedrock",
-        "openai"
+        "bedrock"
       ],
       "failed_calls": 3,
-      "problems": [],
-      "passed": true
+      "problems": [
+        "no fallback after the fault"
+      ],
+      "passed": false,
+      "account_outage": true
     },
     {
       "name": "total_outage_early",
       "expected": "Both providers down from the start: failed with LLM_UNAVAILABLE, no plan, no report",
-      "analysis_id": "e0276549-7657-4598-a2c3-27f3355de8a5",
+      "analysis_id": "49e8f03f-7fa3-40d1-9421-a535a5f21642",
       "order": [
         "bedrock",
         "openai"
@@ -744,12 +397,13 @@
       "answered_by": [],
       "failed_calls": 2,
       "problems": [],
-      "passed": true
+      "passed": true,
+      "account_outage": false
     },
     {
       "name": "total_outage_late",
       "expected": "Both providers lost after verified findings exist: completed with limitations, the verified findings without narrative, the early stop disclosed",
-      "analysis_id": "a962c16c-9385-4a7c-9896-10bad6b2aede",
+      "analysis_id": "f9a34dd2-05c9-4a6a-b01e-711e14b545de",
       "order": [
         "bedrock",
         "openai"
@@ -759,17 +413,18 @@
         "llm:bedrock",
         "llm:openai"
       ],
-      "late_faults_after_seq": 93,
+      "late_faults_after_seq": 61,
       "status": "completed_with_limitations",
       "error": null,
-      "findings": 4,
+      "findings": 3,
       "fallback_events": [],
       "answered_by": [
         "bedrock"
       ],
       "failed_calls": 2,
       "problems": [],
-      "passed": true
+      "passed": true,
+      "account_outage": false
     },
     {
       "name": "partial_stream_failure",
@@ -807,34 +462,182 @@
       "categories": {
         "overstated_or_contradicted": {
           "cases": 12,
-          "judged": 12,
-          "removed": 12,
-          "recall": 1.0,
+          "judged": 0,
+          "removed": 0,
+          "recall": 0.0,
           "missed": []
         },
         "unsupported_addition": {
           "cases": 12,
-          "judged": 12,
-          "removed": 12,
-          "recall": 1.0,
+          "judged": 0,
+          "removed": 0,
+          "recall": 0.0,
           "missed": []
         }
       },
-      "recall": 1.0,
+      "recall": 0.0,
       "false_positive_rate": 0.0,
       "false_positives": [],
-      "unjudged": 0
+      "unjudged": 34
     }
   ],
+  "not_evaluated": {
+    "runs": [
+      {
+        "query": "G07",
+        "order": "openai",
+        "run": 1
+      },
+      {
+        "query": "G08",
+        "order": "openai",
+        "run": 1
+      },
+      {
+        "query": "G09",
+        "order": "openai",
+        "run": 1
+      },
+      {
+        "query": "G10",
+        "order": "openai",
+        "run": 1
+      },
+      {
+        "query": "G11",
+        "order": "openai",
+        "run": 1
+      },
+      {
+        "query": "G12",
+        "order": "openai",
+        "run": 1
+      },
+      {
+        "query": "G01",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G01",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G02",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G02",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G03",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G04",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G03",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G05",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G04",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G06",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G05",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G07",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G06",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G09",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G07",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G08",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G09",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G11",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G10",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G11",
+        "order": "openai",
+        "run": 2
+      },
+      {
+        "query": "G12",
+        "order": "bedrock",
+        "run": 2
+      },
+      {
+        "query": "G12",
+        "order": "openai",
+        "run": 2
+      }
+    ],
+    "scenarios": [
+      "fallback_bedrock_to_openai",
+      "primary_lost_mid_run"
+    ],
+    "judges": [
+      "openai (34 of 34 sentences without a verdict)"
+    ]
+  },
+  "complete": false,
   "relevance": {
     "bedrock": {
       "runs": 12,
-      "relevant": 9,
-      "not_relevant": [
-        "G02",
-        "G04",
-        "G09"
-      ],
+      "relevant": 12,
+      "not_relevant": [],
       "not_reviewed": []
     },
     "openai": {
@@ -856,12 +659,12 @@
     "provider_resilience": true
   },
   "targets": {
-    "series_identities": false,
-    "clarification_only_when_ambiguous": false,
+    "series_identities": true,
+    "clarification_only_when_ambiguous": true,
     "consistency_jaccard": true,
     "direction_agreement": true,
     "qualitative_recall": true,
-    "human_relevance": false
+    "human_relevance": true
   },
   "hard_gates_passed": true
 }

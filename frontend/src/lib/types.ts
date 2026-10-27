@@ -35,6 +35,8 @@ export type Plan = {
   end_year: number | null;
   // Set when the researcher asked for annual or quarterly figures; absent in older plans.
   frequency?: "annual" | "quarterly" | null;
+  // First period of the later part when the question compares before and after a point in time.
+  comparison_start?: string | null;
   sub_questions: string[];
   assumptions: string[];
   rationale: string;

@@ -1171,3 +1171,48 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **G09:** Extraction's rejection reasons ("starts in 2008") never reach the report. When no finding covers a planned item, the reason should be a limitation.
 - **G08:** the option cap added in this PR keeps the first four options. When Nova listed 15 sectors, that dropped Information & Communications. A long list should go back to the model to choose from, not be cut off.
 - **G01 (and the series-identity misses):** the Coordinator needs to see which planned sector × metric pairs still lack a series.
+
+## M3 outcomes: fixes from the live evaluation
+
+**Delivered:** fixes for the five issues the live evaluation and the relevance review found, and three more found while making them. Prompt version 3, display-rounding version 2.
+
+**The five fixes:**
+- **The Coordinator sees coverage gaps (G01).** Its evidence summary, and Extraction's task, list the planned sector × metric pairs with no selected series and those with no verified finding. The prompts say to re-extract while rounds remain, and not to finish while a planned pair is unsearched.
+- **The plan's period follows the question (G04).** It starts at the earliest year the question names and runs at least to the latest; "after" or "since" a year extends it to the latest complete year. An empty period is filled from the named years. "SSIC 2020" is not a year. Any change is recorded as an assumption.
+  - A before/after question records where the later part starts (`comparison_start`, e.g. 2022-Q3 for "after mid-2022"). The suggested period comparison splits there instead of in half, and the plan card shows it.
+- **A coverage gap says why, from the fetched data (G09).** "No verified finding covers employment level in Information & Communications: M182841 has it only for 2008 to 2025, not for all of 1985 to 1990." The reasons are computed from the series themselves, never from an agent's wording: a series was selected but nothing verified; a dataset has it only for a stated span; it has it but it was not selected; no fetched dataset has it.
+- **Totals read as sums (G02).** "summed to +9.2 thousand persons over 2022 to 2023", where it used to say "totalled ... between 2022 and 2023". A one-period window reads "in 2023", not "in 2023 to 2023".
+- **Too many clarification options are chosen from, not cut (G08).** A focused call asks the model to pick two to four of its own options; the answer must be a subset, and truncation is the last resort. A question that still lists its choices after the repair is cut to its first sentence.
+
+**Found while making them:**
+- **A plan that asks the researcher may leave the sector or metric open.** That is what it asks about. Before this, "no sector chosen" made the repair fail and the question was refused as out of scope, which is probably why G08 was refused in the first live run. Only vocabulary decides scope; how a question is put never does.
+- **"Proceed with assumptions" on a plan with no sector or metric re-plans with the most sensible default,** instead of adopting an empty plan that can select nothing. Once the researcher has answered or chosen to proceed, the plan does not ask again.
+- **A policy route sets its own objective.** When the guard overrules a proposal, the refused proposal's objective no longer carries over. A consistency run showed the damage: after both extraction rounds, a refused "extract (find recruitment rate)" was routed to analysis with that objective, and Analytics drafted nothing about the vacancy series it had. This fix came after the live run below: a scripted test covers it, a live run does not yet.
+
+**Results (27 Oct 2026, 24 golden runs, all evaluated):**
+
+| | Before (PR #9) | Now |
+|---|---|---|
+| Refusal correctness, golden runs | 12/12, 12/12 | 12/12, 12/12 |
+| Retained-claim failures, computation mismatches | 0, 0 | 0, 0 (all 72 runs) |
+| Series identities (target ≥ 11/12) | 10/12, 10/12 | **11/12, 11/12** |
+| Unexpected clarifications | G09 (Bedrock) | **none** |
+| Golden computations found | 7/13, 6/13 | 10/13, 8/13 |
+| Bedrock active time p50 | 45 s | 38 s |
+
+- **Consistency over the evaluated runs:** Jaccard 0.89, no direction conflicts.
+- **Resilience:** the four scenarios that were evaluated pass.
+- **Judge:** the Bedrock judge has 100% recall and 0% false positives (34/34 judged).
+- **Human relevance review** of the 24 golden runs: Bedrock 12/12 and OpenAI 11/12 (target at least 10/12, met; it was 9/12 on Bedrock). The development assistant proposed a verdict for each entry; the reviewer confirmed them. G12 on OpenAI remains not relevant.
+
+**Incomplete:** the OpenAI account ran out of credits partway through the run. The call ledger records it ("You have no credits remaining").
+- **Not evaluated:** 28 of the 48 repeat runs (none of the golden runs), the two scenarios that need OpenAI as the fallback, and the OpenAI judge.
+- **How the summary reports them:** as not evaluated, chosen from the ledger and never from the outcome. What they stored is still checked: retained claims and computations, 0 failures. The summary is marked incomplete and the command exits non-zero, so this is not presented as a full pass.
+- **Where full evidence lives:** the complete, all-passing evaluation of the previous prompt version is in PR #9's results. The router and fallback code these scenarios exercise is unchanged since.
+- **To complete it:** `make eval-live ARGS=--redo` re-runs only the spoiled work and records what each replacement replaces. It needs OpenAI credits.
+
+**Still open:**
+- **G02 (Bedrock)** still answers with MOM's annual employment change instead of the level series. It is now worded clearly but answers indirectly.
+- **G08 (Bedrock)** asks with two broad options (goods-producing industries, services).
+- **G12 (OpenAI)** still reads "hiring" as the recruitment rate, which has no ICT series.
+- **The fallback demo needs a working second provider:** OpenAI credits, or a free alternative such as Gemini's free tier or a local model.
