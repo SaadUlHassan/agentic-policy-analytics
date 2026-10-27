@@ -6,6 +6,8 @@ from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
 from app.core.config import Settings
+from app.llm import providers
+from app.llm.offline import OfflineChatModel
 from app.llm.router import LLMRouter, LLMUnavailable, normalise
 from app.llm.scripted import ScriptedChatModel, tool_call
 
@@ -30,6 +32,16 @@ def _router(bedrock: list, openai: list, **kw) -> tuple[LLMRouter, list]:
     models = {"bedrock": ScriptedChatModel(replies=bedrock), "openai": ScriptedChatModel(replies=openai)}
     router = LLMRouter(settings=Settings(_env_file=None), models=models, on_record=sink, backoff_s=0, **kw)
     return router, records
+
+
+def test_offline_mode_never_builds_a_real_provider(monkeypatch):
+    def real(provider, settings):
+        raise AssertionError(f"built a real {provider} model in offline mode")
+
+    monkeypatch.setattr(providers, "build", real)
+    router = LLMRouter(settings=Settings(_env_file=None, llm_mode="offline"))
+    assert isinstance(router.model("bedrock"), OfflineChatModel)
+    assert isinstance(router.model("openai"), OfflineChatModel)
 
 
 def test_normalise_drops_reasoning_blocks_and_keeps_tool_calls():

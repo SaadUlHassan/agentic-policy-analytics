@@ -19,6 +19,7 @@ export const TERMINAL_STATUSES: ReadonlySet<AnalysisStatus> = new Set([
 export type AgentEvent = {
   seq: number;
   ts: string;
+  committed_at?: string | null; // when the event committed, where the database tracks it
   agent: string;
   type: string;
   title: string;

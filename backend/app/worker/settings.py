@@ -17,7 +17,6 @@ from app.db.session import get_sessionmaker
 from app.jobs.checkpoint import ensure_tables, open_pool
 from app.jobs.lifecycle import Reconciled, reconcile
 from app.jobs.runner import execute
-from app.llm.offline import offline_models
 
 log = structlog.get_logger()
 
@@ -37,7 +36,6 @@ async def run_analysis(ctx: dict[str, Any], analysis_id: str, intent_id: int) ->
         intent_id,
         owner=ctx["owner"],
         checkpoints=ctx["checkpoints"],
-        models=offline_models() if settings.llm_mode == "offline" else None,
     )
 
 

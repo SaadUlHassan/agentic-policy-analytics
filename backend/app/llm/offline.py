@@ -206,7 +206,3 @@ class OfflineChatModel(BaseChatModel):
         if "compute" in bound:
             return _analytics_step(messages, _window(messages))
         raise RuntimeError(f"offline model: no answer for tools {sorted(bound)}")
-
-
-def offline_models() -> dict[Provider, BaseChatModel]:
-    return {"bedrock": OfflineChatModel(provider="bedrock"), "openai": OfflineChatModel(provider="openai")}

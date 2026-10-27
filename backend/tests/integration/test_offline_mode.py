@@ -8,7 +8,6 @@ from sqlalchemy import select
 from app.db.models import LLMCall, OutboxIntent, ReportRow
 from app.jobs.lifecycle import create_analysis, submit_clarification
 from app.jobs.runner import execute
-from app.llm.offline import offline_models
 from tests.integration.test_analysis_graph import _events, _resume_intent, _settings, _start
 
 pytestmark = pytest.mark.integration
@@ -24,7 +23,6 @@ async def _run(sessions, database_url, checkpoints, analysis_id, intent):
         intent,
         "test",
         checkpoints=checkpoints,
-        models=offline_models(),
     )
 
 
