@@ -32,3 +32,19 @@ def test_fault_injection_rejected_in_prod():
 def test_secrets_are_not_rendered():
     s = Settings(_env_file=None, openai_api_key="sk-test-secret")
     assert "sk-test-secret" not in repr(s)
+
+
+def test_a_database_password_with_url_special_characters_is_encoded_for_both_drivers():
+    from psycopg.conninfo import conninfo_to_dict
+    from sqlalchemy.engine import make_url
+
+    from app.jobs.checkpoint import checkpoint_conninfo
+
+    password = "p@ss:w/rd%#?&x"
+    settings = Settings(
+        _env_file=None, database_url="postgresql+asyncpg://policy@db:5432/policy", database_password=password
+    )
+
+    assert make_url(settings.database_url).password == password  # SQLAlchemy (api, worker)
+    assert conninfo_to_dict(checkpoint_conninfo(settings.database_url))["password"] == password  # checkpoints
+    assert make_url(settings.database_url).host == "db"

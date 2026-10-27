@@ -6,8 +6,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, ValidationInfo, field_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 Provider = Literal["bedrock", "openai"]
 
@@ -20,6 +21,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     database_url: str = "postgresql+asyncpg://policy:policy@localhost:5432/policy"
+    # Given on its own, the password may contain any character (@, /, :, %): it is encoded into
+    # database_url here rather than pasted into a URL by hand.
+    database_password: SecretStr | None = None
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
 
@@ -57,6 +61,13 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @model_validator(mode="after")
+    def _password_into_url(self) -> Settings:
+        if self.database_password is not None:
+            url = make_url(self.database_url).set(password=self.database_password.get_secret_value())
+            self.database_url = url.render_as_string(hide_password=False)
+        return self
 
     @field_validator("enable_fault_injection")
     @classmethod
