@@ -254,7 +254,10 @@ stateDiagram-v2
   - **running:** it stays `running` until the worker reaches the next node or tool-call boundary and ends it as `cancelled`. The final transitions (pause, finish) re-check the request under the row lock, so a cancel after the last boundary still wins and the report is discarded. If the worker has died, the reconciler cancels it instead of resuming it;
   - **terminal:** `409 ALREADY_TERMINAL`.
 
-  **Cancellation takes precedence over an answer.** If an answer lands first, the analysis is `queued` with a resume intent; the cancel then supersedes that intent, and a claim only succeeds on a queued or running analysis, so it never resumes. If the cancel lands first, the answer gets `409 ALREADY_TERMINAL`. Either way the analysis ends `cancelled`.
+  **Cancellation takes precedence over an answer,** and the analysis ends `cancelled` whichever lands first:
+  - **cancel first:** the answer gets `409 ALREADY_TERMINAL`;
+  - **answer first, not yet claimed:** the analysis is `queued` with a resume intent. The cancel cancels it at once and supersedes the intent, and a claim only succeeds on a queued or running analysis with an open intent, so the answer never runs;
+  - **answer first, already claimed:** a worker took the resume intent before the cancel arrived, so the analysis is `running` again. The cancel is then a request like any other on a running analysis: the resumed run stops at its next node or tool-call boundary (or at the final pause or finish, which re-check it) and ends `cancelled`, discarding any report. Steps run between the claim and that boundary, including LLM calls, are not undone.
 - **Active-time budget.** Heartbeats add active time; pause and finish add the remainder. A recovered run is charged for the interval its crashed worker never reported, so recovery can't grant extra time.
 - **Checkpoint compatibility.** A checkpoint from an incompatible graph version is not resumed; the analysis fails with `INCOMPATIBLE_CHECKPOINT`.
 

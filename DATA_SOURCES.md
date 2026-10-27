@@ -121,7 +121,7 @@ Several datasets republish the same MOM statistic. A mirror on a second platform
 
 | Platform and endpoint | Limit used per 10 s | Requests it covers |
 |---|---|---|
-| Data.gov.sg datastore | 4 without a key; 8 or 20 with a key, by `DATAGOV_KEY_TIER` (`dev` or `prod`) | Datastore pages and metadata requests |
+| Data.gov.sg datastore | 4 without a key; 8 or 20 with a key, by `DATAGOV_KEY_TIER` (`dev` or `prod`). An empty `DATAGOV_API_KEY`, as `.env.example` ships it, is no key | Datastore pages and metadata requests |
 | Data.gov.sg downloads | 2 without a key; 4 or 10 with a key | `initiate-download` and each `poll-download` |
 | MOM | 10 (one a second) | Index page, workbook and CSV |
 | SingStat | not spaced | — |
@@ -134,7 +134,7 @@ Several datasets republish the same MOM statistic. A mirror on a second platform
 - **Only this platform's own requests are counted.** Other software calling Data.gov.sg from the same address, or with the same key, draws on the same allowance without the spacing knowing. An over-limit response is still handled: an HTTP 429 or 5xx, or a datastore body without `result` (observed when keyless), is retried.
 - **Retries take slots too.** Every request gets up to three attempts with increasing backoff, each waiting for its own slot. After that the request falls back to its snapshot when one exists, and the report discloses it.
 
-**API key.** `DATAGOV_API_KEY` is sent as `x-api-key`, only to `data.gov.sg` and its subdomains (never to the pre-signed S3 URL), and `DATAGOV_KEY_TIER` must match the tier the key was issued for, since it sets the spacing. A free key is recommended for live demos.
+**API key.** Without `DATAGOV_API_KEY`, or with it empty or blank, the keyless limits apply and no key header is sent; `DATAGOV_KEY_TIER` is then ignored. A key is sent as `x-api-key`, only to `data.gov.sg` and its subdomains (never to the pre-signed S3 URL), and `DATAGOV_KEY_TIER` must match the tier the key was issued for, since it sets the spacing. A free key is recommended for live demos.
 
 ## Adding a dataset or a source
 

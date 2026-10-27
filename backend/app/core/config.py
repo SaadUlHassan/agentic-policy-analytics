@@ -65,6 +65,12 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
+    @field_validator("aws_bedrock_api_key", "openai_api_key", "datagov_api_key", mode="before")
+    @classmethod
+    def _blank_key_is_no_key(cls, v: object) -> object:
+        # .env.example leaves keys empty (KEY=): that means no key, not a key that is the empty string.
+        return None if isinstance(v, str) and not v.strip() else v
+
     @model_validator(mode="after")
     def _password_into_url(self) -> Settings:
         if self.database_password is not None:

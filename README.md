@@ -106,7 +106,7 @@ The integration tests and the live evaluation use the compose Postgres and Redis
 
 | Command | What it runs | Needs |
 |---|---|---|
-| `make test` | 359 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
+| `make test` | 360 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
 | `make coverage` | The same, with coverage; backend core packages are gated at 80% (currently 94%) | as `make test` |
 | `make eval` | Deterministic gates: golden computations against independently computed values, refusal correctness, the adversarial verifier suite. Writes `eval/results/deterministic.{json,md}` | uv dependencies only |
 | `make e2e` | Playwright browser tests at 375, 768 and 1280 px against an isolated offline stack (ports 8200/3200), torn down afterwards | Docker, Node dependencies and Playwright's Chromium |
@@ -150,7 +150,7 @@ All settings come from environment variables (`.env` locally). [.env.example](.e
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | —, `gpt-5.5` | OpenAI fallback |
 | `LLM_PRICES` | unset | USD per million input/output tokens by model ID; cost is shown only when every model used is priced |
 | `DATA_MODE` | `live` | `snapshot` reads the committed real-data snapshots instead of the government APIs |
-| `DATAGOV_API_KEY`, `DATAGOV_KEY_TIER` | —, `dev` | Optional Data.gov.sg key and the tier it was issued for (raises the shared rate limits) |
+| `DATAGOV_API_KEY`, `DATAGOV_KEY_TIER` | —, `dev` | Optional Data.gov.sg key and the tier it was issued for (raises the shared rate limits). Left empty, it is no key and the tier is ignored |
 | `ENABLE_FAULT_INJECTION` | `false` | Demo switches for provider and source outages (`/api/admin/faults`); refused when `APP_ENV=prod` |
 | `WEB_PORT`, `API_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | 3000, 8000, 5432, 6379 | Host ports, all bound to loopback |
 
