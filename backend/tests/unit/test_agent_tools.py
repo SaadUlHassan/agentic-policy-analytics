@@ -9,7 +9,7 @@ import respx
 from pydantic import ValidationError
 
 from app.agents.context import AgentContext
-from app.agents.plan import ResearchPlan
+from app.agents.plan import ResearchPlan, cap_options, validate_plan, vocabulary
 from app.agents.tools import analytics_tools, extraction_tools
 from app.connectors import singstat
 from app.connectors.catalog import get_catalog
@@ -83,6 +83,29 @@ async def test_selection_outside_the_plan_is_refused():
     )
     assert reply.startswith("REFUSED by policy") and "it_info_services" in reply
     assert not ctx.evidence.selected
+
+
+async def test_a_series_at_another_frequency_than_the_plan_asks_for_is_refused():
+    # "Annual ICT job vacancies": the quarterly series measures the right thing at the wrong frequency.
+    ctx = _ctx()
+    tools = _tools(extraction_tools(ctx, PLAN.model_copy(update={"frequency": "annual"})))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M184071", "rationale": "r"})
+    reply = await tools["select_series"].ainvoke(
+        {"series_key": VACANCIES, "reason": "fits", "rationale": "r"}
+    )
+    assert reply.startswith("REFUSED by policy") and "the plan asks for annual figures" in reply
+    assert not ctx.evidence.selected
+
+
+def test_a_long_clarification_option_list_is_a_plan_problem_and_is_capped():
+    plan = PLAN.model_copy(
+        update={"needs_clarification": True, "clarification_options": [f"option {i}" for i in range(15)]}
+    )
+    sectors, metrics = vocabulary(get_catalog(), get_taxonomy())
+    assert validate_plan(plan, sectors, metrics) == ["offer at most 4 clarification options, not 15"]
+    capped = cap_options(plan)
+    assert capped.clarification_options == ["option 0", "option 1", "option 2", "option 3"]
+    assert validate_plan(capped, sectors, metrics) == []
 
 
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():

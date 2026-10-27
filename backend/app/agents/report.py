@@ -55,6 +55,9 @@ def build_report(
                     for i in evidence.computations[a.computation_id].inputs
                 }
             ),
+            # What was verified: the template and its bindings, so the stored report can be re-checked
+            # against the stored computations without the run's in-memory state.
+            "claim": c.model_dump(mode="json"),
         }
         for c in verified
     ]

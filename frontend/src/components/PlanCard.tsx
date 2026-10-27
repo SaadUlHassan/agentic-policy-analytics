@@ -16,6 +16,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
           <dt className="text-ink-3">Period</dt>
           <dd>
             {plan.start_year}–{plan.end_year}
+            {plan.frequency && `, ${plan.frequency} figures`}
           </dd>
         </dl>
       ) : (

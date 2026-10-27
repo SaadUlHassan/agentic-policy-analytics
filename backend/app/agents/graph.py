@@ -14,7 +14,7 @@ from langgraph.types import Command, interrupt
 from app.agents import prompts
 from app.agents.context import AgentContext
 from app.agents.evidence import to_refs
-from app.agents.plan import NextAction, ResearchPlan, validate_plan, vocabulary
+from app.agents.plan import NextAction, ResearchPlan, cap_options, validate_plan, vocabulary
 from app.agents.react import run_react
 from app.agents.report import ReportNarrative, build_report
 from app.agents.tools import analytics_tools, extraction_tools
@@ -61,8 +61,10 @@ async def interpret(
     )
     if problems := validate_plan(plan, sectors, metrics):
         messages.append(HumanMessage("Revise the plan. Problems: " + "; ".join(problems)))
-        plan = await ctx.router.structured(
-            ResearchPlan, messages, agent="coordinator", purpose="plan_repair", deadline=ctx.deadline
+        plan = cap_options(
+            await ctx.router.structured(
+                ResearchPlan, messages, agent="coordinator", purpose="plan_repair", deadline=ctx.deadline
+            )
         )
         if problems := validate_plan(plan, sectors, metrics):
             plan = plan.model_copy(

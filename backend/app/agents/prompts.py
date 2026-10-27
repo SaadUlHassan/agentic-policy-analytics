@@ -22,10 +22,13 @@ Turn the researcher's question into a research plan.
 - "Technology sector" or "tech" means Information & Communications (info_comms); record that mapping as an
   assumption. IT & Other Information Services (it_info_services) is a narrower subsector, never a synonym.
 - If the question names no period, use the most recent five complete years and say so in assumptions.
+- Set frequency only when the researcher asks for annual or quarterly figures ("annual vacancies",
+  "quarter by quarter"); otherwise leave it null.
 - Mark in_scope=false for anything that is not Singapore labour-market data by industry.
 - Set needs_clarification only when no sector or metric can sensibly be inferred (e.g. "how is the
-  economy doing?"). Then ask one short question and offer two to four concrete options. When a
-  reasonable default exists, use it and record it as an assumption instead of asking.
+  economy doing?", "how is the sector doing?"). Such a question is in scope: ask, do not refuse it.
+  Ask one short question and offer two to four concrete options. When a reasonable default exists,
+  use it and record it as an assumption instead of asking.
 - Do not answer the question or state any figures."""
 
 
@@ -43,8 +46,9 @@ and select the series that fit. {PUBLIC_RATIONALE}
 
 Rules:
 - Search the catalogue, fetch candidate datasets, then inspect the series for each planned sector.
-- Select a series only if it measures the planned sector and metric and covers the period. Reject series
-  that do not fit (wrong sector level, missing years, wrong metric), giving the reason.
+- Select a series only if it measures the planned sector and metric and covers the period, at the plan's
+  frequency when it names one. Reject series that do not fit (wrong sector level, missing years, wrong
+  metric or frequency), giving the reason.
 - A parent sector and its subsector are different series; never treat one as the other.
 - Search results list `mirrors` / `mirror_of`: the same statistic republished on another platform.
   Selecting a series cross-checks it against its mirror automatically; select only one of the two.
