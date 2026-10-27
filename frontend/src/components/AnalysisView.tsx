@@ -78,11 +78,12 @@ export function AnalysisView({ id }: { id: string }) {
           </p>
         )}
       </header>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="order-2 lg:order-1">
+      {/* minmax(0, …) and min-w-0: a column never grows to fit a long identifier; text wraps instead. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 [overflow-wrap:anywhere] lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="order-2 min-w-0 lg:order-1">
           <AgentTimeline events={events} connected={connected} finished={finalStatus !== null} />
         </div>
-        <div className="order-1 flex flex-col gap-4 lg:order-2">
+        <div className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
           {question && (
             <ClarificationCard
               key={question.version}

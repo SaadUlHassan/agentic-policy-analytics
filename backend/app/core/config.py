@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # LLM_PRICES='{"<model id>": [<input>, <output>]}'. Empty by default: cost is shown only when every
     # model used has a configured price.
     llm_prices: dict[str, tuple[float, float]] = {}
+    # "offline" answers every LLM step with a deterministic stand-in (app/llm/offline.py): end-to-end
+    # tests and load runs, no provider calls. Refused in production.
+    llm_mode: Literal["live", "offline"] = "live"
 
     # Data (plan §4.5-4.6). DATA_DIR holds the manifest, taxonomy and snapshots.
     data_mode: Literal["live", "snapshot"] = "live"
@@ -74,6 +77,13 @@ class Settings(BaseSettings):
     def _no_faults_in_prod(cls, v: bool, info: ValidationInfo) -> bool:
         if v and info.data.get("app_env") == "prod":
             raise ValueError("ENABLE_FAULT_INJECTION must be false when APP_ENV=prod")
+        return v
+
+    @field_validator("llm_mode")
+    @classmethod
+    def _no_offline_llm_in_prod(cls, v: str, info: ValidationInfo) -> str:
+        if v == "offline" and info.data.get("app_env") == "prod":
+            raise ValueError("LLM_MODE=offline is for tests and load runs; it is refused when APP_ENV=prod")
         return v
 
 

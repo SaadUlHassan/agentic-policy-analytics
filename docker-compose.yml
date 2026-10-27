@@ -12,6 +12,9 @@ x-backend: &backend
     CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
     DATA_DIR: /app/data
     LLM_PROVIDER_ORDER: ${LLM_PROVIDER_ORDER:-bedrock,openai}
+    # LLM_MODE=offline answers with a deterministic stand-in (end-to-end tests, load runs; no cost).
+    LLM_MODE: ${LLM_MODE:-live}
+    DATA_MODE: ${DATA_MODE:-live}
     # Demo fault switches (PUT/DELETE /api/admin/faults/{name}); refused when APP_ENV=prod.
     ENABLE_FAULT_INJECTION: ${ENABLE_FAULT_INJECTION:-false}
   volumes:

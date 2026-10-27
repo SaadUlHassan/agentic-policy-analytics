@@ -1,8 +1,8 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down reset logs ps smoke prod-up prod-down test test-backend test-frontend coverage lint fmt typecheck eval eval-live eval-expected probe snapshots
+.PHONY: help up down reset logs ps smoke prod-up prod-down test test-backend test-frontend coverage e2e e2e-up e2e-down load lint fmt typecheck eval eval-live eval-expected probe snapshots
 
 help: ## List targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
 
 up: ## Build and start the full stack, waiting until every service is healthy
 	docker compose up -d --build --wait --wait-timeout 180
@@ -41,6 +41,21 @@ coverage: ## Coverage: backend core packages (gated at 80% in CI) and frontend (
 	cd backend && uv run pytest -q --cov --cov-report=xml && uv run coverage report --fail-under=80 --skip-covered \
 		--include='app/agents/*,app/analytics/*,app/connectors/*,app/data/*,app/grounding/*,app/jobs/*,app/events/*'
 	cd frontend && npm run coverage
+
+# Offline stack for end-to-end and load runs: deterministic LLM stand-in, snapshot data, no cost.
+E2E := API_PORT=8200 WEB_PORT=3200 docker compose -p policy-e2e -f docker-compose.yml -f docker-compose.e2e.yml
+
+e2e-up: ## Start the offline stack (API :8200, web :3200), isolated from the development stack
+	$(E2E) up -d --build --wait --wait-timeout 300
+
+e2e-down: ## Stop the offline stack and delete its data
+	$(E2E) down -v
+
+e2e: e2e-up ## Browser tests at 375, 768 and 1280 px against the offline stack
+	cd frontend && npx playwright test; status=$$?; cd .. && $(E2E) down -v; exit $$status
+
+load: e2e-up ## 5-minute load run against the offline stack (plan 8.4) -> eval/results/load
+	cd backend && uv run python -m app.evaluation.load $(ARGS); status=$$?; cd .. && $(E2E) down -v; exit $$status
 
 lint: ## Lint and format-check everything
 	cd backend && uv run ruff check . ../scripts ../eval && uv run ruff format --check . ../scripts ../eval

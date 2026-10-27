@@ -1,4 +1,5 @@
 import type { DatasetQuality, QualityCheck } from "@/lib/types";
+import { platformName } from "@/lib/platforms";
 
 // Severity is never shown by colour alone: every check has an icon and a word.
 const SEVERITY: Record<QualityCheck["severity"], { icon: string; label: string; className: string; order: number }> = {
@@ -29,7 +30,7 @@ export function DataQualityPanel({ datasets }: { datasets: DatasetQuality[] }) {
             <summary className="cursor-pointer">
               <span className="font-medium">{d.dataset_id}</span>{" "}
               <span className="text-ink-2">
-                · {d.platform} · {d.role === "evidence" ? "used as evidence" : "used to cross-check"} · {counts(d.checks)}
+                · {platformName(d.platform)} · {d.role === "evidence" ? "used as evidence" : "used to cross-check"} · {counts(d.checks)}
                 {d.from_snapshot && " · served from stored snapshot"}
               </span>
             </summary>

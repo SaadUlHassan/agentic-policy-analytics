@@ -1,0 +1,25 @@
+# End-to-end and load runs: the development stack in offline mode, isolated from it.
+#
+#   docker compose -p policy-e2e -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait
+#
+# (`make e2e` and `make load` do this with the ports below.) The LLM is the deterministic offline
+# stand-in and the data are the committed snapshots: no provider calls, no network, no cost. Its own
+# images and project name keep it apart from a development stack running on the same machine.
+x-offline: &offline
+  image: policy-analytics-backend:e2e
+  environment:
+    LLM_MODE: offline
+    DATA_MODE: snapshot
+    ENABLE_FAULT_INJECTION: "false"
+
+services:
+  # Only the API and the web app are reachable from the host; the rest stays inside the stack.
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  migrate: *offline
+  api: *offline
+  worker: *offline
+  web:
+    image: policy-analytics-web:e2e

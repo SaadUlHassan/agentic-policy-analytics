@@ -148,10 +148,61 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.prod.yml down -v
 
+  e2e:
+    # Browser tests at 375, 768 and 1280 px against the stack in offline mode (no provider calls).
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    env:
+      API_PORT: "8200"
+      WEB_PORT: "3200"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Start the offline stack
+        run: docker compose -p policy-e2e -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 300
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Browser tests
+        run: npx playwright test
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.6"
+          enable-cache: true
+      - run: uv sync --frozen
+        working-directory: backend
+      # 30 seconds of the 8.4 workload: fails on any lost or incorrect result (latency is reported,
+      # not gated: hosted runners vary too much). The 5-minute run is `make load`.
+      - name: Load smoke
+        run: uv run python -m app.evaluation.load --duration 30 --out ../eval/results/load-ci
+        working-directory: backend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-smoke
+          path: eval/results/load-ci
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -p policy-e2e -f docker-compose.yml -f docker-compose.e2e.yml logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose -p policy-e2e -f docker-compose.yml -f docker-compose.e2e.yml down -v
+
   publish:
     # Images go to GHCR only from main and version tags, after every check has passed.
     if: github.event_name == 'push'
-    needs: [backend, frontend, secret-scan, compose-smoke]
+    needs: [backend, frontend, secret-scan, compose-smoke, e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read

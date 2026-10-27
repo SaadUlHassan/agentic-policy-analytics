@@ -30,3 +30,4 @@ frontend/playwright-report/
 # Local artifacts
 eval/results/local/
 *.log
+eval/results/load-ci/

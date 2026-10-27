@@ -17,6 +17,7 @@ from app.db.session import get_sessionmaker
 from app.jobs.checkpoint import ensure_tables, open_pool
 from app.jobs.lifecycle import Reconciled, reconcile
 from app.jobs.runner import execute
+from app.llm.offline import offline_models
 
 log = structlog.get_logger()
 
@@ -27,14 +28,16 @@ async def ping(ctx: dict[str, Any]) -> str:
 
 
 async def run_analysis(ctx: dict[str, Any], analysis_id: str, intent_id: int) -> str:
+    settings = get_settings()
     return await execute(
         get_sessionmaker(),
         ctx["publisher"],
-        get_settings(),
+        settings,
         analysis_id,
         intent_id,
         owner=ctx["owner"],
         checkpoints=ctx["checkpoints"],
+        models=offline_models() if settings.llm_mode == "offline" else None,
     )
 
 
@@ -53,7 +56,7 @@ async def on_startup(ctx: dict[str, Any]) -> None:
     ctx["checkpoints"] = open_pool(settings.database_url)
     await ctx["checkpoints"].open()
     await ensure_tables(ctx["checkpoints"])
-    log.info("worker_started", owner=ctx["owner"])
+    log.info("worker_started", owner=ctx["owner"], llm_mode=settings.llm_mode)
 
 
 async def on_shutdown(ctx: dict[str, Any]) -> None:
