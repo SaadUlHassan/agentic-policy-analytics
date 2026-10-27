@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 concurrency:
@@ -48,6 +49,10 @@ jobs:
         run: uv run mypy app
       - name: "Unit and integration tests (offline: snapshots + scripted LLM; live tests excluded)"
         run: uv run pytest --cov --cov-report=xml --cov-report=term-missing:skip-covered
+      - name: "Core packages coverage >= 80% (agents, analytics, connectors, data, grounding, jobs, events)"
+        run: >-
+          uv run coverage report --fail-under=80 --skip-covered
+          --include='app/agents/*,app/analytics/*,app/connectors/*,app/data/*,app/grounding/*,app/jobs/*,app/events/*'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -76,7 +81,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - name: Tests with coverage (reported, not gated)
+        run: npm run coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/lcov.info
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
@@ -97,6 +108,11 @@ jobs:
   compose-smoke:
     needs: [backend, frontend]
     runs-on: ubuntu-latest
+    env:
+      # Used by the production stack only (the development compose ignores them).
+      POSTGRES_PASSWORD: ci-only-password
+      BACKEND_IMAGE: policy-analytics-backend:local
+      WEB_IMAGE: policy-analytics-web:local
     steps:
       - uses: actions/checkout@v4
       - name: Build and start the stack
@@ -113,3 +129,50 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+      # The production configuration on the images just built: production settings, no fault switches.
+      - name: Start the production stack
+        run: docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 300
+      - name: Production settings, fault injection off
+        run: |
+          curl -fsS http://localhost:8000/api/health
+          docker compose -f docker-compose.prod.yml exec -T api python -c \
+            "from app.core.config import get_settings as g; s = g(); assert s.app_env == 'prod' and not s.enable_fault_injection"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X PUT http://localhost:8000/api/admin/faults/llm:bedrock)" = 404
+          curl -fsS http://localhost:3000/ | grep -q "Agentic Policy Analytics"
+          docker compose -f docker-compose.prod.yml exec -T api python -m app.worker.smoke
+      - name: Production logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --no-color
+      - name: Tear down the production stack
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v
+
+  publish:
+    # Images go to GHCR only from main and version tags, after every check has passed.
+    if: github.event_name == 'push'
+    needs: [backend, frontend, secret-scan, compose-smoke]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build and push the backend and web images
+        env:
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          registry="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          version="$(echo "$GITHUB_REF_NAME" | sed 's#/#-#g')"
+          for image in backend frontend; do
+            name="agentic-policy-analytics-$([ "$image" = frontend ] && echo web || echo backend)"
+            tags="-t $registry/$name:sha-$(echo "$GITHUB_SHA" | cut -c1-7) -t $registry/$name:$version"
+            if [ "$GITHUB_REF" = "refs/heads/main" ]; then tags="$tags -t $registry/$name:latest"; fi
+            # shellcheck disable=SC2086 # $tags is a list of -t options
+            docker build $tags \
+              --label "org.opencontainers.image.source=$SOURCE" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              "$image"
+            docker push --all-tags "$registry/$name"
+          done

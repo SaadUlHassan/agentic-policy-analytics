@@ -1216,3 +1216,24 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **G08 (Bedrock)** asks with two broad options (goods-producing industries, services).
 - **G12 (OpenAI)** still reads "hiring" as the recruitment rate, which has no ICT series.
 - **The fallback demo needs a working second provider:** OpenAI credits, or a free alternative such as Gemini's free tier or a local model.
+
+## M3 outcomes: deployment configuration
+
+**Delivered:** a production compose file, image publishing to GHCR, and coverage reports in CI.
+
+- **`docker-compose.prod.yml`** runs the published images with `APP_ENV=prod` and `ENABLE_FAULT_INJECTION=false`.
+  - The settings refuse fault injection in production, so the fault routes do not exist (404).
+  - The database password must be supplied (`POSTGRES_PASSWORD`), and Postgres and Redis are not published.
+  - The API and web ports stay on loopback, and services restart unless stopped.
+  - `BACKEND_IMAGE` / `WEB_IMAGE` pin a version (e.g. `:sha-<commit>`).
+  - The data directory (catalogue, taxonomy, snapshots) is mounted from the checkout.
+  - The web image has the API address built in (`NEXT_PUBLIC_API_URL`); it is rebuilt for another address.
+  - The app has no authentication: an authenticating reverse proxy is required before exposing it beyond the host.
+- **CI tests the production configuration** on the images it has just built, in the compose-smoke job. It checks the health endpoint, the settings (prod, faults off), the fault route (404), the web app and a worker job round trip.
+- **Publishing:** after every check passes on a push to `main` or a `v*` tag, the backend and web images are pushed to `ghcr.io/saadulhassan/agentic-policy-analytics-{backend,web}`, tagged `sha-<commit>` and the branch or tag name, plus `latest` from main. They carry OCI source and revision labels.
+  - The job uses the Docker CLI with the workflow token, so no third-party actions are needed.
+  - It never runs for pull requests.
+- **Coverage:**
+  - The backend core packages (agents, analytics, connectors, data, grounding, jobs, events) are gated at 80% in CI. They are at 94% (branch coverage included).
+  - Frontend coverage is reported as an lcov artifact (66% of lines), not gated.
+  - `make coverage` runs both.
