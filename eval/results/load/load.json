@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-10-27T21:13:03+00:00",
+  "machine": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "processor": "arm",
+    "cpus": 8
+  },
+  "workload": {
+    "duration_s": 300,
+    "analysis_slots": 10,
+    "websocket_listeners": 50,
+    "read_rate_per_s": 20,
+    "question": "Analyse employment trends in the technology sector from 2020-2024",
+    "llm": "offline stand-in (LLM_MODE=offline), snapshot data"
+  },
+  "analyses_submitted": 782,
+  "analyses_per_minute": 156.4,
+  "reads": 5999,
+  "events_delivered_live": 306411,
+  "errors": 0,
+  "error_samples": [],
+  "error_rate": 0.0,
+  "lost_terminal_results": [],
+  "incorrect_results": [],
+  "latency_ms": {
+    "post_ack_p50": 80.5,
+    "post_ack_p95": 139.5,
+    "read_p50": 31.5,
+    "read_p95": 99.2,
+    "event_delivery_p50": 29.0,
+    "event_delivery_p95": 99.4,
+    "queue_wait_p50": 2647.8,
+    "queue_wait_p95": 3576.4
+  },
+  "targets": {
+    "analyses_checked": true,
+    "zero_lost_terminal_results": true,
+    "zero_correctness_failures": true,
+    "post_ack_p95 < 300 ms": true,
+    "read_p95 < 300 ms": true,
+    "event_delivery_p95 < 1000 ms": true
+  },
+  "elapsed_s": 307.0,
+  "mean_delivery_ms": 38.3
+}

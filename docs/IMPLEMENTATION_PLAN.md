@@ -1239,3 +1239,46 @@ All of the following was verified live: the example query on Bedrock primary, on
   - The backend core packages (agents, analytics, connectors, data, grounding, jobs, events) are gated at 80% in CI. They are at 94% (branch coverage included).
   - Frontend coverage is reported as an lcov artifact (66% of lines), not gated.
   - `make coverage` runs both.
+
+## M3 outcomes: end-to-end and load runs
+
+**Delivered:** an offline LLM mode, browser end-to-end tests at three widths, and the §8.4 load run. None of them calls a model provider or costs anything.
+
+- **Offline mode (`LLM_MODE=offline`).** A deterministic stand-in answers every LLM step the way an agent following the prompts would: plan, ask about an ambiguous question, choose the next step, run Extraction and Analytics, draft claims, write and judge the narrative. It works from the step's tool or schema and the conversation so far, on snapshot data.
+  - Everything it drafts passes through the same deterministic checks as a real model's output.
+  - The settings refuse it when `APP_ENV=prod`.
+  - It is enforced where the router makes every model: in offline mode no real provider client is ever built, whoever constructs the router.
+  - The ledger records its calls as `offline-<provider>`, with zero tokens, so its output can never pass for a real model's.
+  - It knows one topic, ICT employment and vacancies, which is all the end-to-end and load runs need.
+- **Isolated stack.** `docker-compose.e2e.yml` runs the development stack in offline mode with snapshot data, under its own project name and image tags. Only the API (:8200) and the web app (:3200) are published, so it runs beside a development stack without touching it.
+- **Browser tests** (Playwright 1.63, Chromium) at 375, 768 and 1280 px, via `make e2e` and a CI job:
+  - **Main question:** it reaches a verified, cited report with two findings, citing SingStat and Data.gov.sg. The plan card, agent activity, the chart's table view and all three exports work; the Markdown export is fetched and checked; the analysis appears in the history.
+  - **Ambiguous question:** it is asked about, the researcher answers, and the analysis resumes and completes.
+  - **Validation:** a question that is too short cannot be run.
+  - **On every page:** no sideways scroll.
+- **What the browser tests found and fixed:**
+  - **The report page scrolled sideways at every width, by up to 1,000 px.** The grid's single mobile column grew to fit long identifiers (dataset IDs, series keys). Grid columns are now `minmax(0, …)`, their children `min-w-0`, and long tokens wrap anywhere.
+  - **Platform keys were shown to readers** ("via singstat"). Sources, the data-quality panel and the timeline now show SingStat, Data.gov.sg and MOM.
+- **Load run** (`make load`, a 30-second smoke in CI).
+  - **Driver:** a purpose-built asyncio driver replaces Locust. §8.4's event-delivery target is measured from an event's commit time to the client receiving it over the WebSocket, which Locust does not measure without custom plumbing.
+  - **Workload (§8.4):** 10 analysis slots resubmitting continuously, 50 WebSocket listeners, and 20 reads a second of history and detail. Reads arrive on a fixed schedule, so a slow read does not lower the rate.
+  - **Event delivery** is measured from the event's commit to the client receiving it. An event's `ts` is when its transaction started, so the end-to-end stack's Postgres records commit times (`track_commit_timestamp`) and the stream sends each event's `committed_at`. Where commit times are not tracked, `committed_at` is null and nothing is measured. Only events committed after the client's connection opened count; history replayed on connecting is not a delivery.
+  - **Unmeasured is not met:** a latency target with no samples is reported as "not measured". A malformed report is an incorrect result, not a crash.
+  - **Lost results:** WebSocket follows stop when the window closes, so a stalled stream cannot hold the run. Then every submitted analysis is waited for over the API; one that never reaches a terminal status with a stored report is lost.
+  - **Correctness:** every result must complete with exactly the expected findings, series and text, and no rejected claim. Their values come from the independently computed golden expectations (C02, C07), so a wrong number is a correctness failure.
+  - **CI:** the smoke run fails on any lost or incorrect result, and when it checked no analysis at all. Latency is reported but not gated, because hosted runners vary.
+
+**Load results** (27 Oct 2026, M1 Pro with 8 CPUs, Docker Desktop, one worker with 4 concurrent jobs, 5 minutes):
+
+| Measure | p50 | p95 | Target |
+|---|---|---|---|
+| POST acknowledgement | 81 ms | 140 ms | p95 < 300 ms, met |
+| Read (history or detail) | 32 ms | 99 ms | p95 < 300 ms, met |
+| Event delivery (commit to client) | 29 ms | 99 ms | p95 < 1 s, met |
+| Queue wait (submission to start) | 2.6 s | 3.6 s | reported |
+
+- **Volume:** 782 analyses (156 a minute), 306,411 live events delivered and 5,999 reads (20 a second, as requested).
+- **Failures:** 0 errors, 0 lost terminal results, 0 incorrect results.
+- **Repeatability:** three earlier runs, before some of the measurement fixes above, gave the same picture (798 to 847 analyses; p95s within 25 ms of these). The first two fell behind the requested read rate (about 18 a second), and all three measured delivery from the transaction start rather than the commit.
+- **Queue wait** reflects 10 slots sharing 4 worker slots, and is what horizontal worker scaling addresses.
+- **Scope:** these numbers measure the platform (API, queue, worker, database, event delivery), not a model. Live latency and cost per analysis come from the live evaluation.

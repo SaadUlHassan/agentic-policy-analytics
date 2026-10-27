@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DataQualityPanel } from "@/components/DataQualityPanel";
 import { SeriesChart, splitChart } from "@/components/SeriesChart";
 import type { Citation, Finding, Report } from "@/lib/types";
+import { platformName } from "@/lib/platforms";
 
 function CitationChip({ id }: { id: string }) {
   return (
@@ -23,7 +24,7 @@ function SourceItem({ c }: { c: Citation }) {
       </a>
       <span className="text-ink-2">
         {" "}
-        · {c.dataset_id} · {c.publisher} via {c.platform} · originating agency {c.origin_agency}
+        · {c.dataset_id} · {c.publisher} via {platformName(c.platform)} · originating agency {c.origin_agency}
       </span>
       <div className="text-xs text-ink-3">
         Series: {c.series.join("; ")} · periods {c.periods[0]}–{c.periods[c.periods.length - 1]} · retrieved{" "}

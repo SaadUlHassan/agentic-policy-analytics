@@ -48,3 +48,9 @@ def test_a_database_password_with_url_special_characters_is_encoded_for_both_dri
     assert make_url(settings.database_url).password == password  # SQLAlchemy (api, worker)
     assert conninfo_to_dict(checkpoint_conninfo(settings.database_url))["password"] == password  # checkpoints
     assert make_url(settings.database_url).host == "db"
+
+
+def test_offline_llm_mode_is_refused_in_production():
+    assert Settings(_env_file=None, llm_mode="offline").llm_mode == "offline"
+    with pytest.raises(ValidationError, match="LLM_MODE=offline"):
+        Settings(_env_file=None, app_env="prod", llm_mode="offline")

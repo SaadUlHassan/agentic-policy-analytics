@@ -27,10 +27,11 @@ async def ping(ctx: dict[str, Any]) -> str:
 
 
 async def run_analysis(ctx: dict[str, Any], analysis_id: str, intent_id: int) -> str:
+    settings = get_settings()
     return await execute(
         get_sessionmaker(),
         ctx["publisher"],
-        get_settings(),
+        settings,
         analysis_id,
         intent_id,
         owner=ctx["owner"],
@@ -53,7 +54,7 @@ async def on_startup(ctx: dict[str, Any]) -> None:
     ctx["checkpoints"] = open_pool(settings.database_url)
     await ctx["checkpoints"].open()
     await ensure_tables(ctx["checkpoints"])
-    log.info("worker_started", owner=ctx["owner"])
+    log.info("worker_started", owner=ctx["owner"], llm_mode=settings.llm_mode)
 
 
 async def on_shutdown(ctx: dict[str, Any]) -> None:

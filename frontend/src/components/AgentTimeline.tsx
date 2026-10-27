@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import type { AgentEvent } from "@/lib/types";
+import { platformName } from "@/lib/platforms";
 
 const AGENTS = ["coordinator", "extraction", "analytics", "system"] as const;
 const AGENT_COLOR: Record<string, string> = {
@@ -98,7 +99,7 @@ function EventBody({ event }: { event: AgentEvent }) {
       return (
         <div className="text-sm">
           <p>
-            {str(d.title)} <span className="text-ink-3">({str(d.platform)})</span>
+            {str(d.title)} <span className="text-ink-3">({platformName(str(d.platform))})</span>
           </p>
           <p className="text-xs text-ink-2">
             {str(d.identified)} of {str(d.series)} series identified · issues:{" "}

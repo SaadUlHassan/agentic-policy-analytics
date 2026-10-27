@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 
 import pytest
 from sqlalchemy import func, select, text
@@ -121,6 +122,26 @@ async def test_events_get_consecutive_sequence_numbers_and_replay_in_order(sessi
     async with sessions() as session:
         replay = await events_after(session, analysis_id, after_seq=2)
     assert [e["seq"] for e in replay] == [3, 4, 5]
+
+
+async def test_replayed_events_carry_their_commit_time_where_the_database_tracks_it(sessions):
+    analysis_id, intent_id = await _new(sessions)
+    c = await claim(sessions, analysis_id, intent_id, "w")
+    async with sessions() as session:
+        await FencedWriter(sessions, None, analysis_id, c.epoch)._append_event(
+            session, "system", "status", "held", None
+        )
+        await asyncio.sleep(0.1)  # the transaction stays open after the event's timestamp is taken
+        await session.commit()
+    async with sessions() as session:
+        tracked = await session.scalar(text("SELECT current_setting('track_commit_timestamp')::boolean"))
+        (event,) = await events_after(session, analysis_id, 0)
+    if tracked:  # the end-to-end stack: the commit came at least the held time after the start
+        assert (
+            datetime.fromisoformat(event["committed_at"]) - datetime.fromisoformat(event["ts"])
+        ).total_seconds() >= 0.1
+    else:  # not tracked: no commit time is claimed, and reading events still works
+        assert event["committed_at"] is None
 
 
 async def test_finish_writes_report_and_terminal_event(sessions):

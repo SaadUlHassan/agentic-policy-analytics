@@ -47,4 +47,6 @@ def build(provider: Provider, settings: Settings) -> BaseChatModel:
 
 
 def model_id(provider: Provider, settings: Settings) -> str:
+    if settings.llm_mode == "offline":
+        return f"offline-{provider}"  # never mistaken for a real model in the ledger or usage
     return settings.bedrock_model_id if provider == "bedrock" else settings.openai_model

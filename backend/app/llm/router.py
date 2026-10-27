@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from app.core.config import Provider, Settings
 from app.core.faults import INJECTED, Faults, InjectedFault
 from app.llm import providers
+from app.llm.offline import OfflineChatModel
 
 log = structlog.get_logger()
 T = TypeVar("T", bound=BaseModel)
@@ -165,7 +166,12 @@ class LLMRouter:
 
     def model(self, provider: Provider) -> BaseChatModel:
         if provider not in self.models:
-            self.models[provider] = providers.build(provider, self.settings)
+            # Offline mode is enforced here, where every model is made: no real provider is built.
+            self.models[provider] = (
+                OfflineChatModel(provider=provider)
+                if self.settings.llm_mode == "offline"
+                else providers.build(provider, self.settings)
+            )
         return self.models[provider]
 
     async def step(
