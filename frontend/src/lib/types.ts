@@ -33,6 +33,8 @@ export type Plan = {
   metrics: string[];
   start_year: number | null;
   end_year: number | null;
+  // Set when the researcher asked for annual or quarterly figures; absent in older plans.
+  frequency?: "annual" | "quarterly" | null;
   sub_questions: string[];
   assumptions: string[];
   rationale: string;

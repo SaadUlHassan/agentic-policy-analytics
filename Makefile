@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help up down reset logs ps smoke test test-backend test-frontend lint fmt typecheck eval eval-expected probe snapshots
+.PHONY: help up down reset logs ps smoke test test-backend test-frontend lint fmt typecheck eval eval-live eval-expected probe snapshots
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -44,6 +44,9 @@ typecheck: ## Static type checks
 
 eval: ## Deterministic evaluation gates (golden computations, refusals, adversarial suite) -> eval/results
 	cd backend && uv run python -m app.evaluation
+
+eval-live: ## Live evaluation on both providers (spends LLM calls; needs Postgres and Redis) -> eval/results/live
+	cd backend && uv run python -m app.evaluation.live $(ARGS)
 
 eval-expected: ## Recompute the golden expected values independently from the raw snapshots
 	cd backend && uv run python ../eval/compute_expected.py

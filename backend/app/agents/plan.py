@@ -10,6 +10,7 @@ from app.connectors.catalog import Catalog
 from app.data.taxonomy import Taxonomy
 
 SCHEME = "SSIC2020"
+MAX_CLARIFICATION_OPTIONS = 4
 
 
 class ResearchPlan(BaseModel):
@@ -22,6 +23,10 @@ class ResearchPlan(BaseModel):
     metrics: list[str] = Field(default=[], description="Metric names from the allowed list")
     start_year: int | None = Field(default=None, description="First year of the period of interest")
     end_year: int | None = Field(default=None, description="Last year of the period of interest")
+    frequency: Literal["annual", "quarterly"] | None = Field(
+        default=None,
+        description="Only if the researcher asks for annual or quarterly figures; otherwise null",
+    )
     sub_questions: list[str] = Field(default=[], description="Two to four concrete questions to answer")
     assumptions: list[str] = Field(
         default=[], description="Interpretations made, e.g. how a sector was mapped"
@@ -60,4 +65,16 @@ def validate_plan(plan: ResearchPlan, sectors: dict[str, str], metrics: dict[str
             problems.append("no metric chosen")
         if plan.start_year and plan.end_year and plan.start_year > plan.end_year:
             problems.append("start_year is after end_year")
+    if plan.needs_clarification and len(plan.clarification_options) > MAX_CLARIFICATION_OPTIONS:
+        problems.append(
+            f"offer at most {MAX_CLARIFICATION_OPTIONS} clarification options, "
+            f"not {len(plan.clarification_options)}"
+        )
     return problems
+
+
+def cap_options(plan: ResearchPlan) -> ResearchPlan:
+    """A long option list is shortened: it is never a reason to refuse the question."""
+    return plan.model_copy(
+        update={"clarification_options": plan.clarification_options[:MAX_CLARIFICATION_OPTIONS]}
+    )

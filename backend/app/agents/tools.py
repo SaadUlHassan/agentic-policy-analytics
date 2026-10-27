@@ -290,6 +290,10 @@ def extraction_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                 problems.append(f"sector {identity.sector} is not in the plan {plan.sectors}")
             if identity.metric not in plan.metrics:
                 problems.append(f"metric {identity.metric} is not in the plan {plan.metrics}")
+            if plan.frequency and identity.frequency != plan.frequency:
+                problems.append(
+                    f"the plan asks for {plan.frequency} figures; this series is {identity.frequency}"
+                )
             if missing := _missing_in_window(series, plan_window(plan, identity.frequency)):
                 problems.append(f"no values for {', '.join(missing)}")
             problems += _republished(series_key, dataset.dataset_id, identity)

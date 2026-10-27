@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from app.analytics.results import Computation, Refusal, SeriesInput
+from app.analytics.results import Computation, Refusal, ResultField, SeriesInput
 from app.analytics.tools import Toolkit
 from app.data.models import SeriesData
 from app.data.taxonomy import get_taxonomy
@@ -64,35 +64,41 @@ def _unit(unit: str | None, scale: int | None) -> str | None:
     return None if unit is None else f"{unit} x{scale}"
 
 
+def compare_fields(cid: str, fields: dict[str, ResultField]) -> list[FieldCheck]:
+    """A computation's result fields against golden computation `cid`'s expected fields."""
+    wanted = expected()["computations"][cid]["fields"]
+    out = []
+    for name in sorted(set(wanted) | set(fields)):
+        want, got = wanted.get(name), fields.get(name)
+        expected_unit = _unit(want["unit"], want["scale"]) if want else None
+        actual_unit = _unit(got.unit, got.scale) if got else None
+        ok = (
+            want is not None
+            and got is not None
+            and expected_unit == actual_unit
+            and _agrees(got.value, want["value"], want["tolerance"])
+        )
+        out.append(
+            FieldCheck(
+                cid,
+                name,
+                want["value"] if want else None,
+                got.value if got else None,
+                want["tolerance"] if want else "unexpected field",
+                expected_unit,
+                actual_unit,
+                ok,
+            )
+        )
+    return out
+
+
 def check_computations(series: Series) -> list[FieldCheck]:
     toolkit = Toolkit(get_taxonomy().version)
     out = []
     for cid, spec in golden()["computations"].items():
         result = run_spec(toolkit, spec, series)
-        fields = result.result if isinstance(result, Computation) else {}
-        wanted = expected()["computations"][cid]["fields"]
-        for name in sorted(set(wanted) | set(fields)):
-            want, got = wanted.get(name), fields.get(name)
-            expected_unit = _unit(want["unit"], want["scale"]) if want else None
-            actual_unit = _unit(got.unit, got.scale) if got else None
-            ok = (
-                want is not None
-                and got is not None
-                and expected_unit == actual_unit
-                and _agrees(got.value, want["value"], want["tolerance"])
-            )
-            out.append(
-                FieldCheck(
-                    cid,
-                    name,
-                    want["value"] if want else None,
-                    got.value if got else None,
-                    want["tolerance"] if want else "unexpected field",
-                    expected_unit,
-                    actual_unit,
-                    ok,
-                )
-            )
+        out += compare_fields(cid, result.result if isinstance(result, Computation) else {})
     return out
 
 

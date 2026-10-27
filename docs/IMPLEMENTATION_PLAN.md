@@ -1099,3 +1099,53 @@ All of the following was verified live: the example query on Bedrock primary, on
 
 **Next (F2):** live golden runs on both providers, the consistency runs, the provider-resilience scenarios, the qualitative judge category, and a human relevance review sheet.
 
+
+## M3 outcomes: live evaluation (F2)
+
+**Delivered:** live golden runs on both provider orders, consistency runs, provider-resilience scenarios, the qualitative judge category and a relevance review sheet. They run as `make eval-live`, and the results are in `eval/results/live/` (`live.md` summarises them).
+
+**How a live run is evaluated:**
+- **Same runner, isolated environment.** Each analysis runs in-process through the worker's own runner, with the provider order under test. It uses snapshot data, a separate database (`policy_eval`) and Redis db 14. No other worker can claim these analyses, and fault switches set here affect nothing else.
+- **Nothing the run says about itself is trusted.** Every retained finding is verified again from what was stored: its claim, which reports now carry, checked against the stored computations, with its text rendered again. Its citations must match the inputs of its computations, generated prose must have no unbound numbers or causes, and chart points must equal the source observations.
+- **Golden computations are recognised by fingerprint.** The golden spec is rerun on the series the run selected. Values are checked field by field when the run used the golden datasets themselves. A computation on a republication (e.g. MOM's workbook, in thousands at 0.1, for SingStat's persons) is compared in base units and reported, but not gated: the expectation is pinned to the golden dataset.
+- **Refusal correctness** covers four things: refusing what must be refused (R01 for G06), answering nothing unanswerable (G09, G10), asking when the question is ambiguous (G08), and never refusing an expected computation.
+- **Provider-resilience scenarios** switch providers off at the start, or once the first finding is verified, and check the behaviour §4.7 promises. Partial-stream failure does not apply: model output is not streamed.
+- **The judge category** has 10 faithful summaries, 12 overstated or contradicted sentences and 12 unsupported additions. None of them can be caught deterministically (a test enforces this). Each is judged on its own, by each provider, against the real rendered golden findings. A sentence that could not be judged counts against the target.
+- `--rescore` scores the stored runs again without LLM calls; on this run it reproduced the summary exactly.
+
+**Results (27 Oct 2026; 72 runs: 12 queries × 3 runs × 2 provider orders):**
+
+| Gate | Class | Bedrock primary | OpenAI primary |
+|---|---|---|---|
+| Refusal correctness, golden runs | H | 12/12 | 12/12 |
+| Refusal correctness, all runs | — | 36/36 | 36/36 |
+| Retained-claim failures | H | 0 | 0 |
+| Live computation mismatches | H | 0 | 0 |
+| All three agents decide on supported runs | H | yes | yes |
+| Provider resilience (6 scenarios) | H | all pass | all pass |
+| Series identities, golden runs | T (≥11) | 10/12 | 10/12 |
+| Clarification only when ambiguous | T | G09 asked | none |
+| Judge recall / false positives (34/34 judged) | T (≥80%) | 100% / 0% | 100% / 0% |
+| Active time p50 / p95 | T4 | 45 s / 54 s | 71 s / 160 s |
+
+- **Consistency:** the mean pairwise Jaccard of selected series is 0.81 (target 0.8). Across all six runs of each query, no finding stated a different direction for the same golden computation.
+- **All 14 golden computations made on a republication equal the expectation in base units.**
+- **Cost:** about $14.50 for the 72 runs, at $0.80/$3.20 (Nova Pro) and $5/$30 (GPT-5.5) per million input/output tokens. Tokens: Nova 1.93M in / 0.10M out; GPT-5.5 1.46M in / 0.18M out. `LLM_PRICES` is not configured, so the app itself shows no cost.
+- **Evidence-driven decisions** were made in runs without faults. Examples:
+  - GPT-5.5's Extraction rejected the quarterly vacancy series for "annual vacancies" in G06.
+  - It also rejected M182841 for 1985–1990 (G09) because the series starts in 2008.
+  - The Coordinator requested further analysis rounds.
+
+**Target misses and their causes:**
+- **G01 (Bedrock; also G11 in one consistency run).** Extraction selected only the quarterly employment change and finished, saying no other metric was found, although M182841 was the top search hit. The Coordinator then analysed instead of extracting again, because its evidence summary does not list the planned metrics that still lack a series. Next change: give the Coordinator the uncovered sector × metric pairs, so it re-extracts while rounds remain. It needs its own live run.
+- **G02 (Bedrock)** used MOM's annual employment change instead of the year-end level. MOM states −5.1 thousand for 2023 against −5.9 from the level series, so this is a different statistic, not a republication: a miss.
+- **G07 (GPT-5.5)** used the annual-average vacancy datasets for both sectors. The question names no frequency, so this is a defensible reading, but it is not the golden selection.
+- **G12 (GPT-5.5)** read "hiring" as the recruitment rate, which has no ICT series in the snapshots. The golden query is kept unchanged.
+- **G09 (Bedrock)** asked which metric to use before declining an out-of-coverage period. The run proceeded and still produced no findings.
+
+**Changed because of the first live run:**
+- **The plan records a requested frequency.** Extraction refuses series at the other frequency, and the plan card shows it. Before this, "annual vacancies" could be answered with the quarterly series.
+- **An ambiguous labour-market question is asked about, not refused.** Clarification options are capped at four: a longer list is shortened, never turned into a refusal. Prompt version 2.
+- **First-run problems were infrastructure, not the product.** The OpenAI account ran out of credits, and three concurrent runs throttled Bedrock. The live runner now runs the two provider orders side by side, one run at a time each, and reports the share of calls each primary answered (94% and 95%).
+
+**Still open:** the human relevance review (`eval/results/live/relevance_review.md`, target at least 10/12 per provider). A finding comparing two single-year windows renders as "in 2023 to 2023"; to be tidied in the renderer.
