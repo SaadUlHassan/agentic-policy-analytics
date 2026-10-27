@@ -10,9 +10,8 @@ from dataclasses import dataclass
 from app.core.faults import INJECTED
 from app.db.models import AnalysisStatus
 from app.evaluation.harness import RunResult, RunSpec
-from app.evaluation.scoring import Stored, check_retained
+from app.evaluation.scoring import COMPLETED, Stored, check_retained
 
-COMPLETED = {AnalysisStatus.COMPLETED, AnalysisStatus.COMPLETED_WITH_LIMITATIONS}
 Check = Callable[[Stored, RunResult], list[str]]
 
 
@@ -95,6 +94,13 @@ def _outage_late(stored: Stored, result: RunResult) -> list[str]:
         problems.append("not reported as completed with limitations")
     if not report.get("verification", {}).get("narrative_note", "").startswith("narrative unavailable"):
         problems.append("narrative not disclosed as unavailable")
+    # And actually absent: no generated title, summary or limitations, and nothing was judged.
+    if report.get("summary") or report.get("title") != stored.analysis.query:
+        problems.append("the report still carries a generated title or summary")
+    if any(lim["source"] == "coordinator" for lim in report.get("limitations", [])):
+        problems.append("the report still carries generated limitations")
+    if "narrative_check" in report.get("verification", {}):
+        problems.append("a narrative check is recorded although no narrative was written")
     if not any("LLM_UNAVAILABLE" in lim["text"] for lim in report.get("limitations", [])):
         problems.append("early stop not disclosed")
     return problems

@@ -19,12 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.analytics.results import Computation, Refusal, SeriesInput
 from app.analytics.tools import Toolkit
 from app.data.identity import SeriesIdentity, same_measure_incompatibility
-from app.data.models import NormalizedDataset
+from app.data.models import NormalizedDataset, SeriesData
 from app.data.taxonomy import get_taxonomy
 from app.db.models import (
     Analysis,
     AnalysisArtifact,
     AnalysisEvent,
+    AnalysisStatus,
     ComputationRow,
     DatasetArtifact,
     LLMCall,
@@ -38,6 +39,7 @@ from app.grounding.predicates import PREDICATES
 from app.grounding.render import render_claim
 
 AGENTS = ("coordinator", "extraction", "analytics")
+COMPLETED = {AnalysisStatus.COMPLETED, AnalysisStatus.COMPLETED_WITH_LIMITATIONS}
 
 
 @dataclass
@@ -145,6 +147,59 @@ def _in_base_units(cid: str, computation: Computation) -> dict[str, list[float |
     }
 
 
+def _fetched_input(stored: Stored, ref: SeriesInput) -> tuple[SeriesInput, SeriesData] | None:
+    """A computation input as this analysis fetched it: the identity comes from the source, not
+    from what the computation says about itself."""
+    dataset = stored.datasets.get(ref.artifact_id)
+    data = next((s for s in dataset.series if s.key == ref.series_key), None) if dataset else None
+    if dataset is None or data is None or data.identity is None:
+        return None
+    source = SeriesInput(
+        artifact_id=dataset.artifact_id,
+        dataset_id=dataset.dataset_id,
+        series_key=data.key,
+        identity=data.identity,
+    )
+    return source, data
+
+
+def recompute(stored: Stored, computation: Computation) -> Computation | Refusal | None:
+    """The computation run again on its fetched inputs, or None if an input was never fetched."""
+    inputs = [_fetched_input(stored, ref) for ref in computation.inputs]
+    if any(i is None for i in inputs):
+        return None
+    args = [i for i in inputs if i is not None]
+    toolkit, p = Toolkit(get_taxonomy().version), computation.params
+    if computation.tool == "correlate":
+        return toolkit.correlate(*args[0], *args[1], p["start"], p["end"], p["lag"])
+    if computation.tool == "yoy_change":  # stored as the change between the prior period and `end`
+        return toolkit.yoy_change(*args[0], p["end"])
+    return getattr(toolkit, computation.tool)(*args[0], **p)
+
+
+def check_recomputed(stored: Stored) -> list[str]:
+    """Every stored computation, golden or not and on whichever platform, must be reproduced
+    exactly from the series this analysis fetched: values, inputs with their identities, and
+    fingerprint. Golden computations on the golden datasets are also checked against the
+    independent expectation."""
+    out = []
+    for key, computation in stored.computations.items():
+        again = recompute(stored, computation)
+        if again is None:
+            out.append(f"{key}: an input series was not fetched by this analysis")
+        elif not isinstance(again, Computation):
+            out.append(f"{key}: recomputing it is refused ({again.code})")
+        else:
+            out += [
+                f"{key}: {part} differs when recomputed from the fetched series"
+                for part in ("id", "fingerprint", "inputs", "result", "interpretation_allowed")
+                if getattr(again, part) != getattr(computation, part)
+            ]
+            if key != computation.id:
+                out.append(f"{key}: stored under another computation's id")
+    return out
+
+
 def _names(refusal: Refusal, by_key: dict[str, str]) -> frozenset[str]:
     keys = (refusal.series_key, refusal.other_series_key)
     return frozenset(by_key.get(k, k) for k in keys if k)
@@ -214,6 +269,17 @@ def check_retained(stored: Stored) -> list[str]:
             if data is None:
                 failures.append(f"{chart['id']}: {line['series_key']} not in its cited dataset")
                 continue
+            identity = data.identity
+            stated = (chart["metric"], chart["frequency"], chart["unit"], chart["scale"])
+            if identity is None or stated != (
+                identity.metric,
+                identity.frequency,
+                identity.unit,
+                identity.scale,
+            ):
+                failures.append(
+                    f"{chart['id']}: metric, frequency, unit or scale differ from {line['series_key']}"
+                )
             observed = data.value_map()
             if any(
                 p["period"] not in observed or observed[p["period"]].value != p["value"]
@@ -287,6 +353,8 @@ def _usage(stored: Stored) -> dict[str, Any]:
         "input_tokens": sum(c.input_tokens or 0 for c in stored.calls),
         "output_tokens": sum(c.output_tokens or 0 for c in stored.calls),
         "llm_latency_ms": sum(c.latency_ms for c in stored.calls),
+        # Calls whose token usage is unknown (e.g. a timeout): any cost total is then unknown too.
+        "calls_without_usage": sum(c.input_tokens is None or c.output_tokens is None for c in stored.calls),
         "active_ms": stored.analysis.active_ms_used,
         "by_model": {
             model: [
@@ -319,11 +387,24 @@ def score(
         refusal_problems.append("out-of-domain question was planned as in scope")
     if expect.get("findings") == "none" and findings:
         refusal_problems.append(f"{len(findings)} finding(s) for a question the data cannot answer")
+    if expect.get("computations") and not findings:
+        refusal_problems.append("no verified finding for a question the data can answer")
+    recorded = {r.identity() for r in refusals}
+    toolkit = Toolkit(get_taxonomy().version)
     for rid in expect.get("refusals", []):
         spec = golden()["refusals"][rid]
-        pair = frozenset({spec["series"], spec.get("other", spec["series"])})
-        if not any(r.code == spec["code"] and _names(r, by_key) == pair for r in refusals):
-            refusal_problems.append(f"{rid}: expected {spec['code']} on {sorted(pair)}")
+        needed = (spec["series"], spec.get("other", spec["series"]))
+        if missing := [n for n in needed if n not in selected]:
+            refusal_problems.append(f"{rid}: {', '.join(missing)} not selected")
+            continue
+        # The refusal of exactly this request (tool, series, window, lag) on the run's own series.
+        request = run_spec(toolkit, spec, selected)
+        if (
+            not isinstance(request, Refusal)
+            or request.code != spec["code"]
+            or request.identity() not in recorded
+        ):
+            refusal_problems.append(f"{rid}: expected {spec['code']} for {spec['tool']} {spec['params']}")
     for cid in expect.get("computations", []):
         spec = golden()["computations"][cid]
         pair = frozenset({spec["series"], spec.get("other", spec["series"])})
@@ -354,10 +435,16 @@ def score(
             ]
         else:
             republished[cid] = _in_base_units(cid, computation)
+    mismatches += check_recomputed(stored)
+    # A run must finish: failed, or paused for a question nobody expected, is not an outcome.
+    completed = stored.analysis.status in COMPLETED or (
+        stored.analysis.status == AnalysisStatus.AWAITING_INPUT and bool(expect.get("clarification"))
+    )
     supported_run = bool(findings) and plan.get("in_scope", False)
     agency = autonomy(stored)
     return {
         "status": stored.analysis.status,
+        "completed": completed,
         "error": stored.analysis.error,
         "plan": {
             k: plan.get(k) for k in ("in_scope", "sectors", "metrics", "start_year", "end_year", "intent")

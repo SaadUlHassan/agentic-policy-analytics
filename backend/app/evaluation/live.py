@@ -208,7 +208,9 @@ def _cost(runs: list[dict[str, Any]]) -> dict[str, Any]:
             tokens[model][0] += inp
             tokens[model][1] += outp
     prices = get_settings().llm_prices
-    priced = all(m in prices for m in tokens)
+    unmetered = sum(r["score"]["usage"]["calls_without_usage"] for r in runs)
+    # As in the app: an unpriced model or a call with unknown usage makes the total unknown, not smaller.
+    priced = all(m in prices for m in tokens) and not unmetered
     total = (
         sum(inp / 1e6 * prices[m][0] + outp / 1e6 * prices[m][1] for m, (inp, outp) in tokens.items())
         if priced
@@ -218,6 +220,7 @@ def _cost(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "tokens_by_model": dict(tokens),
         "usd": round(total, 4) if total is not None else None,
         "priced": priced,
+        "calls_without_usage": unmetered,
     }
 
 
@@ -309,6 +312,7 @@ def summarise(out: Path) -> dict[str, Any]:
         complete = all(per_order[o]["queries"] == total_queries for o in orders) and set(orders) == set(
             ORDERS
         )
+        gates["runs_completed"] = all(r["score"]["completed"] for r in runs)
         gates["refusal_correctness"] = complete and all(
             p["refusal_correct"] == total_queries for p in per_order.values()
         )
@@ -442,7 +446,11 @@ def markdown(summary: dict[str, Any]) -> str:
         lines += [
             "",
             f"**Tokens:** {tokens}. **Cost:** "
-            + (f"${cost['usd']:.2f}" if cost["priced"] else "not configured (LLM_PRICES)")
+            + (
+                f"${cost['usd']:.2f}"
+                if cost["priced"]
+                else f"unknown ({cost['calls_without_usage']} call(s) without usage, or LLM_PRICES not set)"
+            )
             + ".",
         ]
     if consistency := summary.get("consistency"):

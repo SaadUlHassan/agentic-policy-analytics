@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T11:57:30+00:00",
+  "generated_at": "2026-10-27T12:24:34+00:00",
   "consistency": {
     "mean_jaccard": 0.8083333333333333,
     "per_query": {
@@ -540,7 +540,8 @@
       ]
     },
     "usd": null,
-    "priced": false
+    "priced": false,
+    "calls_without_usage": 4
   },
   "resilience": [
     {
@@ -826,6 +827,7 @@
     }
   ],
   "gates": {
+    "runs_completed": true,
     "refusal_correctness": true,
     "retained_claim_correctness": true,
     "live_computation_accuracy": true,

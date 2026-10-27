@@ -1107,9 +1107,18 @@ All of the following was verified live: the example query on Bedrock primary, on
 **How a live run is evaluated:**
 - **Same runner, isolated environment.** Each analysis runs in-process through the worker's own runner, with the provider order under test. It uses snapshot data, a separate database (`policy_eval`) and Redis db 14. No other worker can claim these analyses, and fault switches set here affect nothing else.
 - **Nothing the run says about itself is trusted.** Every retained finding is verified again from what was stored: its claim, which reports now carry, checked against the stored computations, with its text rendered again. Its citations must match the inputs of its computations, generated prose must have no unbound numbers or causes, and chart points must equal the source observations.
-- **Golden computations are recognised by fingerprint.** The golden spec is rerun on the series the run selected. Values are checked field by field when the run used the golden datasets themselves. A computation on a republication (e.g. MOM's workbook, in thousands at 0.1, for SingStat's persons) is compared in base units and reported, but not gated: the expectation is pinned to the golden dataset.
-- **Refusal correctness** covers four things: refusing what must be refused (R01 for G06), answering nothing unanswerable (G09, G10), asking when the question is ambiguous (G08), and never refusing an expected computation.
-- **Provider-resilience scenarios** switch providers off at the start, or once the first finding is verified, and check the behaviour §4.7 promises. Partial-stream failure does not apply: model output is not streamed.
+- **Every stored computation is recomputed** from the series this analysis fetched, golden or not and on whichever platform. Its values, its inputs with their identities (from the source, not from what the computation says about itself) and its fingerprint must be reproduced exactly.
+- **Golden computations are recognised by fingerprint.** The golden spec is rerun on the series the run selected. Values are also checked field by field against the independent expectation when the run used the golden datasets themselves. A golden computation on a republication (e.g. MOM's workbook, in thousands at 0.1, for SingStat's persons) is compared in base units and reported: the expectation is pinned to the golden dataset, and the republication's own arithmetic is covered by the recomputation.
+- **Charts must state their series' identity:** the chart's metric, frequency, unit and scale must equal those of every series plotted.
+- **Every run must finish.** A failed run, or one paused for a question nobody expected, fails the `runs completed` gate.
+- **Refusal correctness** covers five things:
+  - refusing what must be refused: the golden refusal spec is rerun on the run's own series, and the identical request (tool, series, window, lag) must be among the run's refusals;
+  - answering nothing unanswerable (G09, G10);
+  - asking when the question is ambiguous (G08);
+  - never refusing an expected computation;
+  - giving at least one verified finding for a question the data can answer.
+- **Provider-resilience scenarios** switch providers off at the start, or once the first finding is verified, and check the behaviour §4.7 promises. A late total outage must leave a report with no generated title, summary or limitations and no narrative check. Partial-stream failure does not apply: model output is not streamed.
+- **Cost follows the app's rule:** an unpriced model, or any call with unknown token usage, makes the total unknown rather than smaller.
 - **The judge category** has 10 faithful summaries, 12 overstated or contradicted sentences and 12 unsupported additions. None of them can be caught deterministically (a test enforces this). Each is judged on its own, by each provider, against the real rendered golden findings. A sentence that could not be judged counts against the target.
 - `--rescore` scores the stored runs again without LLM calls; on this run it reproduced the summary exactly.
 
@@ -1117,6 +1126,7 @@ All of the following was verified live: the example query on Bedrock primary, on
 
 | Gate | Class | Bedrock primary | OpenAI primary |
 |---|---|---|---|
+| Runs completed | H | 36/36 | 36/36 |
 | Refusal correctness, golden runs | H | 12/12 | 12/12 |
 | Refusal correctness, all runs | — | 36/36 | 36/36 |
 | Retained-claim failures | H | 0 | 0 |
@@ -1129,7 +1139,7 @@ All of the following was verified live: the example query on Bedrock primary, on
 | Active time p50 / p95 | T4 | 45 s / 54 s | 71 s / 160 s |
 
 - **Consistency:** the mean pairwise Jaccard of selected series is 0.81 (target 0.8). Across all six runs of each query, no finding stated a different direction for the same golden computation.
-- **All 14 golden computations made on a republication equal the expectation in base units.**
+- **All 278 stored computations** (8 tools) recompute exactly from the fetched series. All 14 golden computations made on a republication equal the expectation in base units.
 - **Cost:** about $14.50 for the 72 runs, at $0.80/$3.20 (Nova Pro) and $5/$30 (GPT-5.5) per million input/output tokens. Tokens: Nova 1.93M in / 0.10M out; GPT-5.5 1.46M in / 0.18M out. `LLM_PRICES` is not configured, so the app itself shows no cost.
 - **Evidence-driven decisions** were made in runs without faults. Examples:
   - GPT-5.5's Extraction rejected the quarterly vacancy series for "annual vacancies" in G06.

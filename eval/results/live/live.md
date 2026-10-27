@@ -1,9 +1,10 @@
 # Live evaluation
 
-Generated 2026-10-27T11:57:30+00:00 from snapshot data with real providers.
+Generated 2026-10-27T12:24:34+00:00 from snapshot data with real providers.
 
 | Hard gate | Result |
 |---|---|
+| runs completed | pass |
 | refusal correctness | pass |
 | retained claim correctness | pass |
 | live computation accuracy | pass |
@@ -53,7 +54,7 @@ Generated 2026-10-27T11:57:30+00:00 from snapshot data with real providers.
 - G06 openai: coordinator requested more analysis: Recompute the annual comparison using the verified employment and vacancy series, explicitly annualising quarterly vacancy observations with a documented method
 - G09 openai: extraction rejected a candidate series: Rejected M182841:3.4@SSIC2020: This annual employment-level series is the correct sector and metric, but it starts in 2008 and has no observations for 1985–1990
 
-**Tokens:** apac.amazon.nova-pro-v1:0: 1,929,684 in / 100,257 out, gpt-5.5: 1,455,073 in / 178,846 out. **Cost:** not configured (LLM_PRICES).
+**Tokens:** apac.amazon.nova-pro-v1:0: 1,929,684 in / 100,257 out, gpt-5.5: 1,455,073 in / 178,846 out. **Cost:** unknown (4 call(s) without usage, or LLM_PRICES not set).
 
 ## Consistency
 
