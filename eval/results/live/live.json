@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T16:16:09+00:00",
+  "generated_at": "2026-10-27T16:30:29+00:00",
   "consistency": {
     "mean_jaccard": 0.8888888888888888,
     "per_query": {
@@ -230,17 +230,17 @@
   "cost": {
     "tokens_by_model": {
       "apac.amazon.nova-pro-v1:0": [
-        969079,
-        49396
+        1917223,
+        96007
       ],
       "gpt-5.5": [
-        631408,
-        77064
+        676069,
+        81693
       ]
     },
     "usd": null,
     "priced": false,
-    "calls_without_usage": 1
+    "calls_without_usage": 142
   },
   "replaced": {
     "runs": [],
@@ -629,7 +629,7 @@
       "primary_lost_mid_run"
     ],
     "judges": [
-      "openai"
+      "openai (34 of 34 sentences without a verdict)"
     ]
   },
   "complete": false,

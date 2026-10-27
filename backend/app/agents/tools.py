@@ -476,13 +476,26 @@ def suggested_correlations(
     return suggestions, refusals
 
 
+def _at_frequency(period: str, window: list[str]) -> str:
+    """A comparison start in the window's own periods: a year starts at its first quarter; a quarter
+    on annual data starts that year if it is the first quarter, otherwise the next year."""
+    quarterly = "-Q" in window[0]
+    if quarterly and "-Q" not in period:
+        return f"{period}-Q1"
+    if not quarterly and "-Q" in period:
+        year, quarter = period.split("-Q")
+        return year if quarter == "1" else str(int(year) + 1)
+    return period
+
+
 def suggested_computations(
     measure: MeasureType, window: list[str], comparison_start: str | None = None
 ) -> list[dict[str, str]]:
     """Statistics that are eligible for this kind of series over the plan window, with exact arguments.
     A period comparison splits the window where the question's later part starts, else in half."""
     start, end = window[0], window[-1]
-    half = window.index(comparison_start) if comparison_start in window[1:] else len(window) // 2
+    split = _at_frequency(comparison_start, window) if comparison_start else None
+    half = window.index(split) if split in window[1:] else len(window) // 2
     halves = {"a_start": start, "a_end": window[half - 1], "b_start": window[half], "b_end": end}
     if measure is MeasureType.FLOW:
         return [{"tool": "cumulative", "start": start, "end": end}, {"tool": "compare_periods", **halves}]

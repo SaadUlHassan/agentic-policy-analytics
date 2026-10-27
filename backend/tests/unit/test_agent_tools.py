@@ -137,6 +137,10 @@ def test_how_a_question_is_put_is_asked_to_be_fixed_but_never_refuses_it():
         ("ICT employment under SSIC 2020 in 2023", (2023, 2023), (2023, 2023)),
         ("How is the sector doing?", (2021, 2025), (2021, 2025)),
         ("Employment from 2020 to 2024", (None, None), (2020, 2024)),
+        ("Employment from 2020 to 2024", (2021, 2025), (2020, 2024)),  # a named end is kept, not widened
+        ("ICT employment in the five years before 2020", (2015, 2019), (2015, 2019)),
+        ("ICT employment before 2020", (None, None), (2015, 2019)),
+        ("ICT employment under ssic 2020 in 2023", (2023, 2023), (2023, 2023)),
     ],
 )
 def test_the_plan_period_covers_the_years_the_question_names(question, planned, aligned):
@@ -732,14 +736,24 @@ async def test_too_many_options_are_chosen_from_not_cut(answer, offered):
         assert chosen == offered
 
 
+def test_a_quarter_on_annual_data_starts_its_year_or_the_next():
+    from app.agents.tools import suggested_computations
+    from app.data.identity import MeasureType
+
+    years = [str(y) for y in range(2020, 2026)]
+    assert suggested_computations(MeasureType.FLOW, years, "2022-Q3")[1]["b_start"] == "2023"
+    assert suggested_computations(MeasureType.FLOW, years, "2022-Q1")[1]["b_start"] == "2022"
+
+
 @pytest.mark.parametrize(
     ("comparison_start", "split"),
     [
         ("2022-Q3", ("2022-Q2", "2022-Q3")),
         (None, ("2022-Q2", "2022-Q3")),
         ("2023-Q1", ("2022-Q4", "2023-Q1")),
-        ("2019-Q1", ("2022-Q2", "2022-Q3")),
-    ],  # outside the window: halves
+        ("2023", ("2022-Q4", "2023-Q1")),  # a year starts at its first quarter
+        ("2019-Q1", ("2022-Q2", "2022-Q3")),  # outside the window: halves
+    ],
 )
 def test_a_period_comparison_splits_where_the_question_does(comparison_start, split):
     from app.agents.tools import suggested_computations

@@ -1,12 +1,12 @@
 # Live evaluation
 
-Generated 2026-10-27T16:16:09+00:00 from snapshot data with real providers.
+Generated 2026-10-27T16:30:29+00:00 from snapshot data with real providers.
 
 **Incomplete: not evaluated because a provider account had no credits (recorded as such in the call ledger).** The gates below cover only what was evaluated; this is not a full pass.
 
 - Runs (28): G07 openai #1, G08 openai #1, G09 openai #1, G10 openai #1, G11 openai #1, G12 openai #1, G01 bedrock #2, G01 openai #2, G02 bedrock #2, G02 openai #2, G03 bedrock #2, G04 bedrock #2, G03 openai #2, G05 bedrock #2, G04 openai #2, G06 bedrock #2, G05 openai #2, G07 bedrock #2, G06 openai #2, G09 bedrock #2, G07 openai #2, G08 openai #2, G09 openai #2, G11 bedrock #2, G10 openai #2, G11 openai #2, G12 bedrock #2, G12 openai #2
 - Resilience scenarios: fallback_bedrock_to_openai, primary_lost_mid_run
-- Judges: openai
+- Judges: openai (34 of 34 sentences without a verdict)
 
 | Hard gate | Result |
 |---|---|
@@ -59,7 +59,7 @@ Generated 2026-10-27T16:16:09+00:00 from snapshot data with real providers.
 - G12 openai: extraction rejected a candidate series: Rejected M184021:1.4.4@SSIC2020: The fetched dataset flags the Information & Communications recruitment-rate rows as ambiguous across multiple occupational-grou
 - G12 openai: extraction rejected a candidate series: Rejected M184021:2.4.4@SSIC2020: This candidate is one of several ambiguous Information & Communications recruitment-rate rows and cannot be validated as the pl
 
-**Tokens:** apac.amazon.nova-pro-v1:0: 969,079 in / 49,396 out, gpt-5.5: 631,408 in / 77,064 out. **Cost:** unknown (1 call(s) without usage, or LLM_PRICES not set).
+**Tokens:** apac.amazon.nova-pro-v1:0: 1,917,223 in / 96,007 out, gpt-5.5: 676,069 in / 81,693 out. **Cost:** unknown (142 call(s) without usage, or LLM_PRICES not set).
 
 ## Consistency
 

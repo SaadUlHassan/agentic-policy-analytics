@@ -376,3 +376,44 @@ async def test_an_account_outage_is_reported_as_not_evaluated_never_as_a_pass(st
     assert summary["gates"]["runs_completed"]  # the spoiled run does not count either way...
     assert not summary["gates"]["retained_claim_correctness"]  # ...but what it stored is still checked
     assert "Incomplete: not evaluated" in live.markdown(summary)
+
+
+def _with(good: dict, **changes) -> dict:
+    return {**good, **changes, "usage": {**good["usage"], **changes.get("usage", {})}}
+
+
+async def test_excluded_runs_still_count_for_cost_and_stored_correctness(stored, tmp_path, monkeypatch):
+    good = score(stored, _expect("G01"), await golden_series(), None)
+    metered = {"by_model": {"m": [1_000_000, 0]}, "calls_without_usage": 0}
+    spoiled = _with(good, account_outage=True, retained_failures=["k1: text differs"], usage=metered)
+    record = {"query_id": "G01", "order": "bedrock", "run": 0, "analysis_id": "a", "clarification": None}
+    (tmp_path / "runs.jsonl").write_text(json.dumps({**record, "score": spoiled}) + "\n")
+    scenario = {
+        "name": "s",
+        "expected": "e",
+        "passed": True,
+        "status": "completed",
+        "answered_by": ["bedrock"],
+    }
+    (tmp_path / "resilience.json").write_text(json.dumps([scenario]))
+    monkeypatch.setattr(get_settings(), "llm_prices", {"m": (1.0, 1.0)})
+
+    summary = live.summarise(tmp_path)
+
+    # Every run is excluded, yet what it stored is checked and what it generated is paid for.
+    assert summary["gates"]["retained_claim_correctness"] is False and not summary["hard_gates_passed"]
+    assert summary["cost"]["usd"] == 1.0
+    assert "k1: text differs" in live.markdown(summary)
+
+
+async def test_a_partly_unjudged_suite_leaves_the_evaluation_incomplete(tmp_path):
+    results = [
+        {"judge": "bedrock", "unjudged": 0, "recall": 1.0},
+        {"judge": "openai", "unjudged": 1, "recall": 1.0},
+    ]
+    (tmp_path / "judge.json").write_text(json.dumps({"findings_shown": [], "results": results}))
+
+    summary = live.summarise(tmp_path)
+
+    assert not summary["complete"]
+    assert summary["not_evaluated"]["judges"] == ["openai (1 of 34 sentences without a verdict)"]

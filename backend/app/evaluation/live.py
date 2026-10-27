@@ -319,7 +319,7 @@ def summarise(out: Path) -> dict[str, Any]:
     targets: dict[str, bool] = {}
     summary: dict[str, Any] = {"generated_at": datetime.now(UTC).isoformat(timespec="seconds")}
 
-    if runs:
+    if scored:
         orders = sorted({r["order"] for r in runs})
         golden_runs = {o: [r for r in runs if r["order"] == o and r["run"] == 0] for o in orders}
         per_order = {}
@@ -432,7 +432,8 @@ def summarise(out: Path) -> dict[str, Any]:
                 for cid, f in r["score"].get("republished_computations", {}).items()
             ],
             "evidence_driven_decisions": evidence_driven,
-            "cost": _cost(runs),
+            # Every generated reply counts, also in runs the outage spoiled.
+            "cost": _cost(scored),
         }
     summary["replaced"] = {
         "runs": [
@@ -460,7 +461,12 @@ def summarise(out: Path) -> dict[str, Any]:
     if judged is not None:
         total = sum(len(group) for group in judge_suite.SENTENCES.values())
         asked = [r for r in judged["results"] if r["unjudged"] < total]
-        not_evaluated["judges"] = [r["judge"] for r in judged["results"] if r["unjudged"] == total]
+        # A judge that left any sentence without a verdict was not fully evaluated.
+        not_evaluated["judges"] = [
+            f"{r['judge']} ({r['unjudged']} of {total} sentences without a verdict)"
+            for r in judged["results"]
+            if r["unjudged"]
+        ]
         # A sentence the judge could not be asked about (provider unavailable) is not a pass.
         targets["qualitative_recall"] = bool(asked) and all(
             r["recall"] >= judge_suite.TARGET_RECALL and not r["unjudged"] for r in asked
@@ -511,7 +517,8 @@ def markdown(summary: dict[str, Any]) -> str:
         *[f"| {k.replace('_', ' ')} | {_mark(v)} |" for k, v in summary["targets"].items()],
         "",
     ]
-    if per_order := summary.get("per_order"):
+    if "per_order" in summary:
+        per_order = summary["per_order"]
         lines += [
             "## Golden runs",
             "",

@@ -110,20 +110,36 @@ def cap_options(plan: ResearchPlan) -> ResearchPlan:
     )
 
 
-# A year the question names as part of its period ("SSIC 2020" names a classification, not a year).
-_YEAR = re.compile(r"(?<!SSIC )(?<!SSIC)\b(19\d{2}|20\d{2})\b")
+# A year the question names ("SSIC 2020" names a classification, not a year).
+_YEAR = re.compile(r"(?<!SSIC )(?<!SSIC)\b(19\d{2}|20\d{2})\b", re.IGNORECASE)
+# "before 2020", "until 2020", "prior to 2020": the period ends the year before.
+_BEFORE = re.compile(
+    r"\b(?:before|until|prior to)\s+(?:mid-|the end of\s+)?(19\d{2}|20\d{2})\b", re.IGNORECASE
+)
 
 
 def align_period(plan: ResearchPlan, question: str, latest_year: int) -> ResearchPlan:
-    """The plan's period covers the years the question names: it starts at the earliest and runs at
-    least to the latest, or to `latest_year` (the last complete year) when the question asks about
-    what came after or since it. A model's 'last five years' must not replace the researcher's period."""
+    """The plan's period is the one the question names. It runs from the earliest year named to the
+    latest; to `latest_year` (the last complete year) when the question asks about what came after or
+    since its latest year; and up to the year before one it is "before". Where the question names no
+    start (e.g. "the five years before 2020"), the plan's own start is kept."""
     years = [int(y) for y in _YEAR.findall(question)]
     if not plan.in_scope or not years:
         return plan
-    last = max(years)
-    open_ended = re.search(rf"\b(after|since)\b[^?.]*\b{last}\b", question, re.IGNORECASE)
-    start, end = min(years), max(plan.end_year or last, latest_year if open_ended else last)
+    before = [int(y) for y in _BEFORE.findall(question)]
+    within = [y for y in years if y not in before]
+    open_ended = bool(within) and re.search(
+        rf"\b(after|since)\b[^?.]*\b{max(within)}\b", question, re.IGNORECASE
+    )
+    if before:
+        end = min(before) - 1
+    elif open_ended:
+        end = latest_year
+    else:
+        end = max(within)
+    start = min(within) if within else plan.start_year
+    if start is None or start > end:
+        start = end - 4
     if (start, end) == (plan.start_year, plan.end_year):
         return plan
     had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
