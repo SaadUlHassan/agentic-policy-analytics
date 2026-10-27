@@ -112,32 +112,32 @@ def cap_options(plan: ResearchPlan) -> ResearchPlan:
 
 # A year the question names ("SSIC 2020" names a classification, not a year).
 _YEAR = re.compile(r"(?<!SSIC )(?<!SSIC)\b(19\d{2}|20\d{2})\b", re.IGNORECASE)
-# "before 2020", "until 2020", "prior to 2020": the period ends the year before.
-_BEFORE = re.compile(
-    r"\b(?:before|until|prior to)\s+(?:mid-|the end of\s+)?(19\d{2}|20\d{2})\b", re.IGNORECASE
-)
+# "before 2020", "prior to 2020": an exclusive upper bound, unless the question names later years too.
+_BEFORE = re.compile(r"\b(?:before|prior to)\s+(?:mid-|the end of\s+)?(19\d{2}|20\d{2})\b", re.IGNORECASE)
 
 
 def align_period(plan: ResearchPlan, question: str, latest_year: int) -> ResearchPlan:
     """The plan's period is the one the question names. It runs from the earliest year named to the
-    latest; to `latest_year` (the last complete year) when the question asks about what came after or
-    since its latest year; and up to the year before one it is "before". Where the question names no
-    start (e.g. "the five years before 2020"), the plan's own start is kept."""
+    latest, or to `latest_year` (the last complete year) when the question asks about what came after
+    or since its latest year. When the latest year named is one the question is "before", the period
+    ends the year before it; where no start is named (e.g. "the five years before 2020"), the plan's
+    own start is kept. A before/after comparison keeps both sides."""
     years = [int(y) for y in _YEAR.findall(question)]
     if not plan.in_scope or not years:
         return plan
     before = [int(y) for y in _BEFORE.findall(question)]
-    within = [y for y in years if y not in before]
-    open_ended = bool(within) and re.search(
-        rf"\b(after|since)\b[^?.]*\b{max(within)}\b", question, re.IGNORECASE
-    )
-    if before:
+    if before and max(years) <= min(before):
         end = min(before) - 1
-    elif open_ended:
-        end = latest_year
+        start = min((y for y in years if y < min(before)), default=plan.start_year)
     else:
-        end = max(within)
-    start = min(within) if within else plan.start_year
+        last = max(years)
+        # Only when "after"/"since" refers to the latest year itself ("after mid-2022"), not merely to
+        # some year earlier in a sentence that names a later one.
+        open_ended = re.search(
+            rf"\b(?:after|since)\s+(?:mid-|early\s+|late\s+|the end of\s+)?{last}\b", question, re.IGNORECASE
+        )
+        end = latest_year if open_ended else last
+        start = min(years)
     if start is None or start > end:
         start = end - 4
     if (start, end) == (plan.start_year, plan.end_year):

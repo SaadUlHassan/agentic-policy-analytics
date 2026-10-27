@@ -141,6 +141,19 @@ def test_how_a_question_is_put_is_asked_to_be_fixed_but_never_refuses_it():
         ("ICT employment in the five years before 2020", (2015, 2019), (2015, 2019)),
         ("ICT employment before 2020", (None, None), (2015, 2019)),
         ("ICT employment under ssic 2020 in 2023", (2023, 2023), (2023, 2023)),
+        # A before/after comparison keeps both sides; "after 2022" does not open a period ending in 2024.
+        (
+            "Compare ICT employment before 2022 with employment after 2022, using 2020 to 2024.",
+            (2020, 2024),
+            (2020, 2024),
+        ),
+        (
+            "Compare ICT employment in 2020 to 2021 (before 2022) with 2022 to 2024.",
+            (2020, 2024),
+            (2020, 2024),
+        ),
+        ("ICT employment since 2020", (2020, 2023), (2020, 2025)),
+        ("ICT employment from 2018 until 2020", (2018, 2020), (2018, 2020)),
     ],
 )
 def test_the_plan_period_covers_the_years_the_question_names(question, planned, aligned):
