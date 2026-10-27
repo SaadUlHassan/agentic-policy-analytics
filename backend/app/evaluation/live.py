@@ -312,7 +312,6 @@ def summarise(out: Path) -> dict[str, Any]:
         complete = all(per_order[o]["queries"] == total_queries for o in orders) and set(orders) == set(
             ORDERS
         )
-        gates["runs_completed"] = all(r["score"]["completed"] for r in runs)
         gates["refusal_correctness"] = complete and all(
             p["refusal_correct"] == total_queries for p in per_order.values()
         )
@@ -333,7 +332,6 @@ def summarise(out: Path) -> dict[str, Any]:
             summary["consistency"] = {"mean_jaccard": mean_jaccard, "per_query": consistency}
         summary |= {
             "runs": len(runs),
-            "unscored": [r["analysis_id"] for r in recorded if "score" not in r],
             "per_order": per_order,
             "retained_failures": retained,
             "computation_mismatches": mismatches,
@@ -352,6 +350,10 @@ def summarise(out: Path) -> dict[str, Any]:
             "evidence_driven_decisions": evidence_driven,
             "cost": _cost(runs),
         }
+    if recorded:
+        # Over every recorded run: one that could not be scored has not been shown to complete.
+        summary["unscored"] = [r["analysis_id"] for r in recorded if "score" not in r]
+        gates["runs_completed"] = not summary["unscored"] and all(r["score"]["completed"] for r in runs)
     if resilience is not None:
         applicable = [r for r in resilience if r["passed"] is not None]
         gates["provider_resilience"] = all(r["passed"] for r in applicable)

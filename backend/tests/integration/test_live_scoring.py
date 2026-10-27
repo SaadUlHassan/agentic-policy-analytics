@@ -269,3 +269,24 @@ async def test_unknown_token_usage_makes_live_cost_unknown(stored, monkeypatch):
     cost = live._cost([{"score": scored}])
 
     assert cost["priced"] is False and cost["usd"] is None
+
+
+async def test_a_run_that_could_not_be_scored_fails_runs_completed(stored, tmp_path):
+    scored = score(stored, _expect("G01"), await golden_series(), None)
+    record = {"query_id": "G01", "order": "bedrock", "analysis_id": "a", "clarification": None}
+    unscored = {**record, "run": 1, "analysis_id": "b", "scoring_error": "KeyError: missing artifact"}
+    (tmp_path / "runs.jsonl").write_text(
+        json.dumps({**record, "run": 0, "score": scored}) + "\n" + json.dumps(unscored) + "\n"
+    )
+
+    summary = live.summarise(tmp_path)
+
+    assert summary["unscored"] == ["b"]
+    assert not summary["gates"]["runs_completed"] and not summary["hard_gates_passed"]
+
+    # Nothing scorable at all, next to a passing resilience phase, still fails.
+    (tmp_path / "runs.jsonl").write_text(json.dumps(unscored) + "\n")
+    (tmp_path / "resilience.json").write_text(json.dumps([{"name": "s", "passed": True}]))
+    summary = live.summarise(tmp_path)
+    assert summary["gates"] == {"runs_completed": False, "provider_resilience": True}
+    assert not summary["hard_gates_passed"]

@@ -1,15 +1,15 @@
 # Live evaluation
 
-Generated 2026-10-27T12:24:34+00:00 from snapshot data with real providers.
+Generated 2026-10-27T12:45:17+00:00 from snapshot data with real providers.
 
 | Hard gate | Result |
 |---|---|
-| runs completed | pass |
 | refusal correctness | pass |
 | retained claim correctness | pass |
 | live computation accuracy | pass |
 | three agents decide | pass |
 | evidence driven decisions | pass |
+| runs completed | pass |
 | provider resilience | pass |
 
 | Target | Result |

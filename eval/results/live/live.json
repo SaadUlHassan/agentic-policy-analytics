@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T12:24:34+00:00",
+  "generated_at": "2026-10-27T12:45:17+00:00",
   "consistency": {
     "mean_jaccard": 0.8083333333333333,
     "per_query": {
@@ -66,7 +66,6 @@
     }
   },
   "runs": 72,
-  "unscored": [],
   "per_order": {
     "bedrock": {
       "queries": 12,
@@ -543,6 +542,7 @@
     "priced": false,
     "calls_without_usage": 4
   },
+  "unscored": [],
   "resilience": [
     {
       "name": "fallback_bedrock_to_openai",
@@ -827,12 +827,12 @@
     }
   ],
   "gates": {
-    "runs_completed": true,
     "refusal_correctness": true,
     "retained_claim_correctness": true,
     "live_computation_accuracy": true,
     "three_agents_decide": true,
     "evidence_driven_decisions": true,
+    "runs_completed": true,
     "provider_resilience": true
   },
   "targets": {
