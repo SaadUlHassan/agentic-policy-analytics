@@ -3,7 +3,7 @@
     "Employment level in Information & Communications rose by 14.4% between 2020 and 2024.",
     "Employment level in Information & Communications grew at a compound rate of 3.4% a year between 2020 and 2024.",
     "Employment level in Information & Communications fell by 3.1% between 2022 and 2023.",
-    "Employment change in Information & Communications totalled +26,800 persons between 2020-Q1 and 2024-Q4.",
+    "Employment change in Information & Communications summed to +26,800 persons over 2020-Q1 to 2024-Q4.",
     "Employment change in Information & Communications averaged 2,600 persons less in 2022-Q3 to 2024-Q4 than in 2020-Q1 to 2022-Q2.",
     "Job vacancies in Information & Communications rose by 21.7% between 2020-Q1 and 2024-Q4.",
     "Job vacancies in IT & Other Information Services rose by 27.5% between 2020-Q1 and 2024-Q4.",
@@ -89,27 +89,27 @@
           {
             "sentence": "Employment in information and communications more than doubled between 2020 and 2024.",
             "removed": true,
-            "reason": "The verified findings show a 14.4% increase, not a doubling."
+            "reason": "The verified findings do not state that employment more than doubled, only that it rose by 14.4%."
           },
           {
             "sentence": "Employment in the sector collapsed between 2022 and 2023.",
             "removed": true,
-            "reason": "The term 'collapsed' is an exaggeration not supported by the findings, which state a 3.1% fall."
+            "reason": "The sentence uses the term 'collapsed' which is not supported by the findings. The findings state a 3.1% fall, which is not equivalent to a collapse."
           },
           {
             "sentence": "Job vacancies in the sector tripled over the period.",
             "removed": true,
-            "reason": "Job vacancies increased by 21.7%, not tripled."
+            "reason": "The findings do not state that job vacancies tripled over the period."
           },
           {
             "sentence": "Vacancies and net hiring moved almost perfectly in step.",
             "removed": true,
-            "reason": "Adds a fact not stated in the findings (net hiring)."
+            "reason": "Adds a fact not stated in the findings."
           },
           {
             "sentence": "Employment in the sector rose every year from 2020 to 2024.",
             "removed": true,
-            "reason": "The findings show a decrease in employment between 2022 and 2023."
+            "reason": "The findings show a decrease in employment between 2022 and 2023, contradicting the statement that employment rose every year."
           },
           {
             "sentence": "Job vacancies in the sector fell over the period.",
@@ -119,12 +119,12 @@
           {
             "sentence": "Net hiring strengthened in the later part of the period.",
             "removed": true,
-            "reason": "Adds a fact not stated in the findings"
+            "reason": "Adds a trend not explicitly stated in the findings."
           },
           {
             "sentence": "IT and other information services saw slower vacancy growth than the sector as a whole.",
             "removed": true,
-            "reason": "The findings state that job vacancies in IT & Other Information Services rose by 27.5%, which is higher than the overall sector growth of 21.7%. Therefore, the sentence is unsupported."
+            "reason": "The sentence claims slower vacancy growth in IT and other information services compared to the sector as a whole, but the findings only provide specific growth rates for job vacancies in Information & Communications and IT & Other Information Services without comparing them directly."
           },
           {
             "sentence": "Employment growth in the sector was negligible over the period.",
@@ -134,7 +134,7 @@
           {
             "sentence": "The sector experienced an unprecedented hiring boom.",
             "removed": true,
-            "reason": "Adds a fact not stated in the findings"
+            "reason": "Adds a fact not stated in the findings."
           },
           {
             "sentence": "There was a strong correlation between vacancies and hiring.",
@@ -156,7 +156,7 @@
           {
             "sentence": "Women accounted for most of the new jobs in the sector.",
             "removed": true,
-            "reason": "Adds a fact about women not present in the findings."
+            "reason": "Adds a fact about women not stated in the findings."
           },
           {
             "sentence": "Foreign workers filled most of the open vacancies.",
@@ -166,7 +166,7 @@
           {
             "sentence": "Wages in the sector rose alongside employment.",
             "removed": true,
-            "reason": "Adds a fact not covered by the findings"
+            "reason": "The verified findings do not mention wages in the sector."
           },
           {
             "sentence": "Singapore's technology sector outperformed its regional peers.",
@@ -176,7 +176,7 @@
           {
             "sentence": "Government support schemes underpinned the rise in hiring.",
             "removed": true,
-            "reason": "Adds a cause not stated in the findings"
+            "reason": "Adds a fact not stated in the findings."
           },
           {
             "sentence": "Retrenchments in the sector fell over the period.",
@@ -186,7 +186,7 @@
           {
             "sentence": "Most vacancies were for senior roles.",
             "removed": true,
-            "reason": "Adds a fact not stated in the findings"
+            "reason": "Adds detail not covered by findings"
           },
           {
             "sentence": "Remote work became more common in the sector.",
@@ -196,7 +196,7 @@
           {
             "sentence": "Employment in financial services also grew over the period.",
             "removed": true,
-            "reason": "Adds a fact not stated in the findings"
+            "reason": "Adds a fact not covered by the findings."
           },
           {
             "sentence": "The decline between 2022 and 2023 reflected a global slowdown in technology firms.",
@@ -216,198 +216,198 @@
       "categories": {
         "overstated_or_contradicted": {
           "cases": 12,
-          "judged": 12,
-          "removed": 12,
-          "recall": 1.0,
+          "judged": 0,
+          "removed": 0,
+          "recall": 0.0,
           "missed": []
         },
         "unsupported_addition": {
           "cases": 12,
-          "judged": 12,
-          "removed": 12,
-          "recall": 1.0,
+          "judged": 0,
+          "removed": 0,
+          "recall": 0.0,
           "missed": []
         }
       },
-      "recall": 1.0,
+      "recall": 0.0,
       "false_positive_rate": 0.0,
       "false_positives": [],
-      "unjudged": 0,
+      "unjudged": 34,
       "verdicts": {
         "valid_summary": [
           {
             "sentence": "Employment in information and communications grew between 2020 and 2024.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/o"
           },
           {
             "sentence": "Employment in the sector dipped between 2022 and 2023.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/o"
           },
           {
             "sentence": "Job vacancies in the sector rose over the period.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/o"
           },
           {
             "sentence": "Vacancies in IT and other information services rose faster than in the sector as a whole.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/o"
           },
           {
             "sentence": "Net employment gains were smaller in the later part of the period than in the earlier part.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/o"
           },
           {
             "sentence": "Quarters with more vacancies tended to see stronger net hiring, an exploratory association rather than evidence of cause.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/o"
           },
           {
             "sentence": "Both employment and job vacancies in the sector were higher at the end of the period than at the start.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Overall the sector added jobs over the period despite a decline between 2022 and 2023.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "The findings do not cover wages or individual occupations.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "The evidence covers employment, net employment change and job vacancies in information and communications.",
-            "removed": false,
-            "reason": ""
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           }
         ],
         "overstated_or_contradicted": [
           {
             "sentence": "Employment in information and communications more than doubled between 2020 and 2024.",
-            "removed": true,
-            "reason": "Findings state a 14.4% rise, not more than doubled"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Employment in the sector collapsed between 2022 and 2023.",
-            "removed": true,
-            "reason": "Findings state a 3.1% fall, not collapse"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Job vacancies in the sector tripled over the period.",
-            "removed": true,
-            "reason": "Findings state vacancies rose 21.7%, not tripled"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Vacancies and net hiring moved almost perfectly in step.",
-            "removed": true,
-            "reason": "Overstates moderate correlation"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Employment in the sector rose every year from 2020 to 2024.",
-            "removed": true,
-            "reason": "Findings include a 2022-2023 fall"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Job vacancies in the sector fell over the period.",
-            "removed": true,
-            "reason": "findings say vacancies rose"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Net hiring strengthened in the later part of the period.",
-            "removed": true,
-            "reason": "Findings say later average employment change was lower"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "IT and other information services saw slower vacancy growth than the sector as a whole.",
-            "removed": true,
-            "reason": "Findings show IT vacancies grew faster than sector"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Employment growth in the sector was negligible over the period.",
-            "removed": true,
-            "reason": "Findings show 14.4% employment growth"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "The sector experienced an unprecedented hiring boom.",
-            "removed": true,
-            "reason": "Adds unprecedented boom not stated"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "There was a strong correlation between vacancies and hiring.",
-            "removed": true,
-            "reason": "finding says r=0.47 tended together, not strong correlation or hiring"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Employment in the sector peaked in 2023.",
-            "removed": true,
-            "reason": "Peak year not stated; findings say employment fell from 2022 to 2023"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           }
         ],
         "unsupported_addition": [
           {
             "sentence": "The growth was concentrated among software developers.",
-            "removed": true,
-            "reason": "Findings do not mention software developers"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Women accounted for most of the new jobs in the sector.",
-            "removed": true,
-            "reason": "Findings do not mention gender or women"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Foreign workers filled most of the open vacancies.",
-            "removed": true,
-            "reason": "Findings do not mention foreign workers or who filled vacancies"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Wages in the sector rose alongside employment.",
-            "removed": true,
-            "reason": "findings do not mention wages"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Singapore's technology sector outperformed its regional peers.",
-            "removed": true,
-            "reason": "regional peer comparison not stated"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Government support schemes underpinned the rise in hiring.",
-            "removed": true,
-            "reason": "Adds unsupported cause"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Retrenchments in the sector fell over the period.",
-            "removed": true,
-            "reason": "Findings do not mention retrenchments"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Most vacancies were for senior roles.",
-            "removed": true,
-            "reason": "Seniority of vacancies not stated"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Remote work became more common in the sector.",
-            "removed": true,
-            "reason": "Remote work not covered by findings"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Employment in financial services also grew over the period.",
-            "removed": true,
-            "reason": "Findings only cover Information & Communications, not financial services"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "The decline between 2022 and 2023 reflected a global slowdown in technology firms.",
-            "removed": true,
-            "reason": "Adds unsupported cause and global technology-firm context"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           },
           {
             "sentence": "Hiring is expected to keep rising in the coming years.",
-            "removed": true,
-            "reason": "Forecast not covered by findings"
+            "removed": null,
+            "reason": "judge unavailable: openai: circuit open"
           }
         ]
       }

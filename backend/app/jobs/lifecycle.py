@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models import TERMINAL_STATUSES, Analysis, AnalysisStatus, OutboxIntent
 
 GRAPH_VERSION = "1"
-PROMPT_VERSION = "2"
+PROMPT_VERSION = "3"
 LEASE_TTL = timedelta(seconds=60)
 REDELIVER_AFTER = timedelta(seconds=60)
 # A running execution adds its active time at every heartbeat, so a crash loses at most one interval.

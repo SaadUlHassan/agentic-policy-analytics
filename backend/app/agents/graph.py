@@ -10,11 +10,22 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 from langgraph.types import Command, interrupt
+from pydantic import BaseModel, Field
 
 from app.agents import prompts
 from app.agents.context import AgentContext
 from app.agents.evidence import to_refs
-from app.agents.plan import NextAction, ResearchPlan, cap_options, validate_plan, vocabulary
+from app.agents.plan import (
+    MAX_CLARIFICATION_OPTIONS,
+    NextAction,
+    ResearchPlan,
+    align_period,
+    cap_options,
+    clarification_problems,
+    shorten_question,
+    validate_plan,
+    vocabulary,
+)
 from app.agents.react import run_react
 from app.agents.report import ReportNarrative, build_report
 from app.agents.tools import analytics_tools, extraction_tools
@@ -56,24 +67,36 @@ async def interpret(
         messages.append(
             HumanMessage(f"The researcher clarified: {answer}. Plan with this; do not ask again.")
         )
-    plan = await ctx.router.structured(
-        ResearchPlan, messages, agent="coordinator", purpose="plan", deadline=ctx.deadline
+
+    def settled(plan: ResearchPlan) -> ResearchPlan:
+        # Once the researcher has answered (or chosen to proceed), the plan does not ask again.
+        return plan.model_copy(update={"needs_clarification": False}) if state.get("clarified") else plan
+
+    plan = settled(
+        await ctx.router.structured(
+            ResearchPlan, messages, agent="coordinator", purpose="plan", deadline=ctx.deadline
+        )
     )
-    if problems := validate_plan(plan, sectors, metrics):
+    if problems := validate_plan(plan, sectors, metrics) + clarification_problems(plan):
         messages.append(HumanMessage("Revise the plan. Problems: " + "; ".join(problems)))
-        plan = cap_options(
+        plan = settled(
             await ctx.router.structured(
                 ResearchPlan, messages, agent="coordinator", purpose="plan_repair", deadline=ctx.deadline
             )
         )
-        if problems := validate_plan(plan, sectors, metrics):
-            plan = plan.model_copy(
-                update={
-                    "in_scope": False,
-                    "scope_note": "The question could not be mapped to supported data: "
-                    + "; ".join(problems),
-                }
-            )
+    plan = align_period(plan, state["query"], latest_year=date.today().year - 1)
+    if plan.needs_clarification:
+        plan = shorten_question(plan)
+        if len(plan.clarification_options) > MAX_CLARIFICATION_OPTIONS:
+            plan = await _choose_options(ctx, state["query"], plan)
+    # Only vocabulary decides scope: how a question is put is never a reason to refuse it.
+    if problems := validate_plan(plan, sectors, metrics):
+        plan = plan.model_copy(
+            update={
+                "in_scope": False,
+                "scope_note": "The question could not be mapped to supported data: " + "; ".join(problems),
+            }
+        )
     if plan.in_scope and (plan.start_year is None or plan.end_year is None):
         end = date.today().year - 1
         plan = plan.model_copy(
@@ -90,6 +113,36 @@ async def interpret(
     if plan.needs_clarification and not state.get("clarified"):
         return Command(update={"plan": plan.model_dump(), "rounds": rounds}, goto="clarify")
     return await _adopt_plan(ctx, plan, rounds)
+
+
+class OptionChoice(BaseModel):
+    options: list[str] = Field(description="The chosen options, copied exactly from the list")
+
+
+async def _choose_options(ctx: AgentContext, query: str, plan: ResearchPlan) -> ResearchPlan:
+    """Too many options to offer: the model picks the ones the researcher most likely means, from its
+    own list. Anything else (an invented option, too many, no answer) falls back to the first ones."""
+    offered = plan.clarification_options
+    try:
+        choice = await ctx.router.structured(
+            OptionChoice,
+            [
+                SystemMessage(
+                    f"Choose two to {MAX_CLARIFICATION_OPTIONS} options to offer a researcher who asked "
+                    "an ambiguous question: the ones they most likely mean. Copy them exactly."
+                ),
+                HumanMessage(f"Question: {query}\nOptions: {json.dumps(offered)}"),
+            ],
+            agent="coordinator",
+            purpose="clarification_options",
+            deadline=ctx.deadline,
+        )
+    except LLMUnavailable:
+        return cap_options(plan)
+    chosen = list(dict.fromkeys(o for o in choice.options if o in offered))
+    if not 2 <= len(chosen) <= MAX_CLARIFICATION_OPTIONS:
+        return cap_options(plan)
+    return plan.model_copy(update={"clarification_options": chosen})
 
 
 async def _adopt_plan(ctx: AgentContext, plan: ResearchPlan, rounds: dict[str, int]) -> Command[Any]:
@@ -114,6 +167,11 @@ async def clarify(
             "assumptions": plan.assumptions,
         }
     )
+    if response.get("proceed") and not (plan.sectors and plan.metrics):
+        # Nothing to proceed with yet (the question was about the sector or the measure): plan again,
+        # taking the most sensible default instead of asking.
+        default = "No preference: use the most sensible default sector and measure, as assumptions."
+        return Command(update={"clarification": default, "clarified": True}, goto="interpret")
     if response.get("proceed"):
         proceeded = plan.model_copy(
             update={"assumptions": [*plan.assumptions, "The researcher chose to proceed without clarifying."]}
@@ -122,8 +180,27 @@ async def clarify(
     return Command(update={"clarification": str(response["answer"]), "clarified": True}, goto="interpret")
 
 
+def _planned_without(ctx: AgentContext, covered: set[tuple[str, str]]) -> list[str]:
+    plan = ctx.plan
+    if plan is None:
+        return []
+    return [f"{m} in {s}" for s in plan.sectors for m in plan.metrics if (s, m) not in covered]
+
+
+def _without_series(ctx: AgentContext) -> list[str]:
+    """Planned sector x metric pairs no selected series measures yet."""
+    selected = {(x.source.identity.sector, x.source.identity.metric) for x in ctx.evidence.selected.values()}
+    return _planned_without(ctx, selected)
+
+
 def _evidence_summary(ctx: AgentContext, rounds: dict[str, int]) -> dict[str, Any]:
     ev = ctx.evidence
+    with_findings = {
+        (ref.identity.sector, ref.identity.metric)
+        for claim in ev.verified_claims()
+        for a in claim.assertions.values()
+        for ref in ev.computations[a.computation_id].inputs
+    }
     return {
         "datasets_fetched": sorted({d.dataset_id for d in ev.datasets.values()}),
         "selected_series": [
@@ -135,6 +212,8 @@ def _evidence_summary(ctx: AgentContext, rounds: dict[str, int]) -> dict[str, An
         "refusals": [f"{r.tool}:{r.code}" for r in ev.refusals],
         "claims_verified": len(ev.verified_claims()),
         "claims_rejected": len(ev.claims) - len(ev.verified_claims()),
+        "planned_without_series": _without_series(ctx),
+        "planned_without_findings": _planned_without(ctx, with_findings),
         "rounds_used": rounds,
         "rounds_allowed": MAX_ROUNDS,
     }
@@ -170,6 +249,15 @@ def _fallback(ctx: AgentContext, rounds: dict[str, int]) -> Action:
     return "report"
 
 
+def _policy_objective(action: Action, ctx: AgentContext) -> str:
+    if action == "extract":
+        missing = _without_series(ctx)
+        return "Find and validate series for the plan" + (f": {', '.join(missing)}" if missing else "")
+    if action == "analyse":
+        return "Compute statistics on the selected series and draft findings (policy route)"
+    return "Write the report from the verified findings (policy route)"
+
+
 _NODE: dict[Action, Node] = {"extract": "extraction", "analyse": "analytics", "report": "report"}
 
 
@@ -194,7 +282,8 @@ async def supervise(
     if reason := _guard(action, ctx, rounds):
         override = f"proposed '{action}' refused by policy: {reason}"
         action = _fallback(ctx, rounds)
-        objective = f"{objective} (policy route: {action})"
+        # The refused proposal's objective was written for another action: the route sets its own.
+        objective = _policy_objective(action, ctx)
     await ctx.writer.emit(
         "coordinator",
         "decision",
@@ -213,7 +302,10 @@ async def extraction(state: GraphState, runtime: Runtime[AgentContext]) -> Comma
     ctx = runtime.context
     await ctx.check_cancel()
     plan = _plan(state)
-    task = f"Research plan: {json.dumps(state['plan'])}\nObjective from the Coordinator: {state['objective']}"
+    task = (
+        f"Research plan: {json.dumps(state['plan'])}\nObjective from the Coordinator: {state['objective']}\n"
+        f"Planned but no series selected yet: {_without_series(ctx) or 'none'}"
+    )
     outcome = await run_react(
         ctx,
         agent="extraction",

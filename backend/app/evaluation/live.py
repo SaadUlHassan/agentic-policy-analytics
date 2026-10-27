@@ -25,13 +25,16 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import or_, select
+
 from app.core.config import Provider, get_settings
+from app.db.models import LLMCall
 from app.evaluation import judge as judge_suite
 from app.evaluation.accuracy import Series
 from app.evaluation.golden import golden, golden_dir, golden_series
 from app.evaluation.harness import Environment, RunResult, RunSpec, run
-from app.evaluation.resilience import scenarios
-from app.evaluation.scoring import load, score
+from app.evaluation.resilience import Scenario, scenarios
+from app.evaluation.scoring import ACCOUNT_REFUSALS, account_outage, load, score
 
 ORDERS: dict[str, tuple[Provider, ...]] = {"bedrock": ("bedrock", "openai"), "openai": ("openai", "bedrock")}
 RESILIENCE_QUERY = "G01"
@@ -75,64 +78,76 @@ async def golden_phase(
 
     async def one(order: str, index: int, query: dict[str, Any]) -> None:
         async with limits[order]:
-            spec = RunSpec(
-                query["query"],
-                ORDERS[order],
-                proceed_on_clarification=not query["expect"].get("clarification"),
-            )
-            result = await run(env, spec)
-            record = {
-                "query_id": query["id"],
-                "order": order,
-                "run": index,
-                "analysis_id": result.analysis_id,
-                "clarification": result.clarification,
-            }
-            try:
-                scored = await _score_golden(env, series, record)
-            except Exception as exc:  # a scorer bug must not lose the run: fix it, then --rescore
-                scored = {**record, "scoring_error": f"{type(exc).__name__}: {exc}"}
-            with path.open("a") as f:
-                f.write(json.dumps(scored, default=str) + "\n")
-            if "score" not in scored:
-                print(f"{query['id']} {order} #{index}: not scored ({scored['scoring_error']})", flush=True)
-                return
-            s = scored["score"]
-            print(
-                f"{query['id']} {order} #{index}: {s['status']} "
-                f"refusal={'ok' if s['refusal_correct'] else 'FAIL'} "
-                f"retained={len(s['retained_failures'])} findings={len(s['findings'])}",
-                flush=True,
-            )
+            record = await _golden_run(env, series, query, order, index)
+        with path.open("a") as f:
+            f.write(json.dumps(record, default=str) + "\n")
 
     # Run index outermost: the golden runs (index 0) of every query finish first.
     for index in range(runs):
         await asyncio.gather(*(one(o, index, q) for o in orders for q in _queries(ids)))
 
 
-async def resilience_phase(env: Environment, out: Path) -> None:
-    query = next(q for q in golden()["queries"] if q["id"] == RESILIENCE_QUERY)["query"]
-    records = []
-    for scenario in scenarios(query):
-        record: dict[str, Any] = {"name": scenario.name, "expected": scenario.expected}
-        if scenario.spec is None:
-            records.append({**record, "passed": None, "not_applicable": scenario.not_applicable})
-            continue
-        await env.faults.switch_off()
-        result = await run(env, scenario.spec)
-        record |= {
-            "analysis_id": result.analysis_id,
-            "order": list(scenario.spec.order),
-            "faults": list(scenario.spec.faults),
-            "late_faults": list(scenario.spec.late_faults),
-            "late_faults_after_seq": result.late_faults_after_seq,
-        }
-        records.append(await _check_scenario(env, record))
+async def _golden_run(
+    env: Environment, series: Series, query: dict[str, Any], order: str, index: int
+) -> dict[str, Any]:
+    """One run of a golden query with one provider order, scored."""
+    spec = RunSpec(
+        query["query"], ORDERS[order], proceed_on_clarification=not query["expect"].get("clarification")
+    )
+    result = await run(env, spec)
+    record = {
+        "query_id": query["id"],
+        "order": order,
+        "run": index,
+        "analysis_id": result.analysis_id,
+        "clarification": result.clarification,
+    }
+    try:
+        scored = await _score_golden(env, series, record)
+    except Exception as exc:  # a scorer bug must not lose the run: fix it, then --rescore
+        scored = {**record, "scoring_error": f"{type(exc).__name__}: {exc}"}
+    label = f"{query['id']} {order} #{index}"
+    if "score" not in scored:
+        print(f"{label}: not scored ({scored['scoring_error']})", flush=True)
+    else:
+        s = scored["score"]
         print(
-            f"{scenario.name}: {'pass' if records[-1]['passed'] else 'FAIL ' + str(records[-1]['problems'])}",
+            f"{label}: {s['status']} refusal={'ok' if s['refusal_correct'] else 'FAIL'} "
+            f"retained={len(s['retained_failures'])} findings={len(s['findings'])}",
             flush=True,
         )
-    _write_json(out / "resilience.json", records)
+    return scored
+
+
+def _resilience_query() -> str:
+    return next(q for q in golden()["queries"] if q["id"] == RESILIENCE_QUERY)["query"]
+
+
+async def resilience_phase(env: Environment, out: Path) -> None:
+    _write_json(
+        out / "resilience.json", [await _run_scenario(env, s) for s in scenarios(_resilience_query())]
+    )
+
+
+async def _run_scenario(env: Environment, scenario: Scenario) -> dict[str, Any]:
+    """One resilience scenario, checked. Scenarios run one at a time: fault switches are shared."""
+    record: dict[str, Any] = {"name": scenario.name, "expected": scenario.expected}
+    if scenario.spec is None:
+        return {**record, "passed": None, "not_applicable": scenario.not_applicable}
+    await env.faults.switch_off()
+    result = await run(env, scenario.spec)
+    record |= {
+        "analysis_id": result.analysis_id,
+        "order": list(scenario.spec.order),
+        "faults": list(scenario.spec.faults),
+        "late_faults": list(scenario.spec.late_faults),
+        "late_faults_after_seq": result.late_faults_after_seq,
+    }
+    checked = await _check_scenario(env, record)
+    print(
+        f"{scenario.name}: {'pass' if checked['passed'] else 'FAIL ' + str(checked['problems'])}", flush=True
+    )
+    return checked
 
 
 async def _check_scenario(env: Environment, record: dict[str, Any]) -> dict[str, Any]:
@@ -156,6 +171,7 @@ async def _check_scenario(env: Environment, record: dict[str, Any]) -> dict[str,
         "failed_calls": sum(not c["ok"] for c in calls),
         "problems": problems,
         "passed": not problems,
+        "account_outage": account_outage(stored),
     }
 
 
@@ -170,6 +186,67 @@ async def judge_phase(series: Series, out: Path) -> None:
             flush=True,
         )
     _write_json(out / "judge.json", {"findings_shown": shown, "results": results})
+
+
+REDO_REASON = "a provider account had no credits (recorded as such in the call ledger)"
+JUDGE_REDO_REASON = "the judge's provider gave no verdict"
+
+
+async def _account_refused(env: Environment, analysis_ids: list[str]) -> set[str]:
+    async with env.sessions() as session:
+        rows = await session.scalars(
+            select(LLMCall.analysis_id)
+            .where(
+                LLMCall.analysis_id.in_(analysis_ids),
+                or_(*(LLMCall.error.contains(marker) for marker in ACCOUNT_REFUSALS)),
+            )
+            .distinct()
+        )
+    return set(rows)
+
+
+async def redo_phase(env: Environment, series: Series, out: Path, concurrency: int) -> bool:
+    """Run again what a provider account outage spoiled, chosen from the call ledger and never from
+    the outcome. Each replacement records what it replaces and why. Returns whether a golden run
+    (the reviewed one) was replaced."""
+    path = out / "runs.jsonl"
+    records = _read_jsonl(path)
+    golden_before = [r for r in records if r["run"] == 0]
+    spoiled = await _account_refused(env, [r["analysis_id"] for r in records])
+    limits = {o: asyncio.Semaphore(concurrency) for o in ORDERS}
+
+    async def again(i: int, old: dict[str, Any]) -> None:
+        query = next(q for q in golden()["queries"] if q["id"] == old["query_id"])
+        async with limits[old["order"]]:
+            new = await _golden_run(env, series, query, old["order"], old["run"])
+        records[i] = {**new, "replaces": {"analysis_id": old["analysis_id"], "reason": REDO_REASON}}
+        path.write_text("".join(json.dumps(r, default=str) + "\n" for r in records))
+
+    await asyncio.gather(*(again(i, r) for i, r in enumerate(records) if r["analysis_id"] in spoiled))
+
+    resilience_path = out / "resilience.json"
+    if resilience_path.exists():
+        checked = json.loads(resilience_path.read_text())
+        hit = await _account_refused(env, [r["analysis_id"] for r in checked if "analysis_id" in r])
+        for i, old in enumerate(checked):
+            if old.get("analysis_id") in hit:
+                scenario = next(s for s in scenarios(_resilience_query()) if s.name == old["name"])
+                replaces = {"analysis_id": old["analysis_id"], "reason": REDO_REASON}
+                checked[i] = {**await _run_scenario(env, scenario), "replaces": replaces}
+        _write_json(resilience_path, checked)
+
+    judge_path = out / "judge.json"
+    if judge_path.exists():
+        judged = json.loads(judge_path.read_text())
+        for i, old in enumerate(judged["results"]):
+            if old["unjudged"]:
+                new = await judge_suite.judge(get_settings(), old["judge"], judged["findings_shown"])
+                judged["results"][i] = {
+                    **new,
+                    "replaces": {"unjudged": old["unjudged"], "reason": JUDGE_REDO_REASON},
+                }
+        _write_json(judge_path, judged)
+    return any(r["analysis_id"] in spoiled for r in golden_before)
 
 
 async def rescore(env: Environment, series: Series, out: Path) -> None:
@@ -227,7 +304,12 @@ def _cost(runs: list[dict[str, Any]]) -> dict[str, Any]:
 
 def summarise(out: Path) -> dict[str, Any]:
     recorded = _read_jsonl(out / "runs.jsonl")
-    runs = [r for r in recorded if "score" in r]
+    scored = [r for r in recorded if "score" in r]
+    # A run a provider account outage spoiled shows the account, not the product: it is listed as
+    # not evaluated and left out of the completion, refusal-over-all-runs and consistency measures.
+    # What it stored is still checked (retained claims, computations): anything kept must be right.
+    spoiled = [r for r in scored if r["score"].get("account_outage")]
+    runs = [r for r in scored if not r["score"].get("account_outage")]
     resilience = (
         json.loads((out / "resilience.json").read_text()) if (out / "resilience.json").exists() else None
     )
@@ -276,12 +358,12 @@ def summarise(out: Path) -> dict[str, Any]:
             }
         retained = [
             {"query": r["query_id"], "order": r["order"], "run": r["run"], "failure": f}
-            for r in runs
+            for r in scored
             for f in r["score"]["retained_failures"]
         ]
         mismatches = [
             {"query": r["query_id"], "order": r["order"], "run": r["run"], "field": f}
-            for r in runs
+            for r in scored
             for f in r["score"]["computation_mismatches"]
         ]
         refusal_all = {
@@ -318,7 +400,7 @@ def summarise(out: Path) -> dict[str, Any]:
         )
         gates["retained_claim_correctness"] = not retained
         gates["live_computation_accuracy"] = not mismatches
-        gates["three_agents_decide"] = all(r["score"]["all_agents_decided"] for r in runs)
+        gates["three_agents_decide"] = all(r["score"]["all_agents_decided"] for r in scored)
         gates["evidence_driven_decisions"] = bool(evidence_driven)
         targets["series_identities"] = complete and all(
             p["identities_correct"] >= MIN_IDENTITIES for p in per_order.values()
@@ -332,7 +414,8 @@ def summarise(out: Path) -> dict[str, Any]:
             targets["direction_agreement"] = not any(c["direction_conflicts"] for c in consistency.values())
             summary["consistency"] = {"mean_jaccard": mean_jaccard, "per_query": consistency}
         summary |= {
-            "runs": len(runs),
+            "runs": len(scored),
+            "evaluated_runs": len(runs),
             "per_order": per_order,
             "retained_failures": retained,
             "computation_mismatches": mismatches,
@@ -351,20 +434,40 @@ def summarise(out: Path) -> dict[str, Any]:
             "evidence_driven_decisions": evidence_driven,
             "cost": _cost(runs),
         }
+    summary["replaced"] = {
+        "runs": [
+            {"query": r["query_id"], "order": r["order"], "run": r["run"], **r["replaces"]}
+            for r in recorded
+            if "replaces" in r
+        ],
+        "scenarios": [r["name"] for r in (resilience or []) if "replaces" in r],
+        "judges": [r["judge"] for r in (judged or {}).get("results", []) if "replaces" in r],
+    }
     if recorded:
         # Over every recorded run: one that could not be scored has not been shown to complete.
         summary["unscored"] = [r["analysis_id"] for r in recorded if "score" not in r]
         gates["runs_completed"] = not summary["unscored"] and all(r["score"]["completed"] for r in runs)
+    not_evaluated: dict[str, list[Any]] = {
+        "runs": [{"query": r["query_id"], "order": r["order"], "run": r["run"]} for r in spoiled],
+        "scenarios": [],
+        "judges": [],
+    }
     if resilience is not None:
-        applicable = [r for r in resilience if r["passed"] is not None]
+        applicable = [r for r in resilience if r["passed"] is not None and not r.get("account_outage")]
+        not_evaluated["scenarios"] = [r["name"] for r in resilience if r.get("account_outage")]
         gates["provider_resilience"] = all(r["passed"] for r in applicable)
         summary["resilience"] = resilience
     if judged is not None:
+        total = sum(len(group) for group in judge_suite.SENTENCES.values())
+        asked = [r for r in judged["results"] if r["unjudged"] < total]
+        not_evaluated["judges"] = [r["judge"] for r in judged["results"] if r["unjudged"] == total]
         # A sentence the judge could not be asked about (provider unavailable) is not a pass.
-        targets["qualitative_recall"] = all(
-            r["recall"] >= judge_suite.TARGET_RECALL and not r["unjudged"] for r in judged["results"]
+        targets["qualitative_recall"] = bool(asked) and all(
+            r["recall"] >= judge_suite.TARGET_RECALL and not r["unjudged"] for r in asked
         )
         summary["judge"] = [{k: v for k, v in r.items() if k != "verdicts"} for r in judged["results"]]
+    summary["not_evaluated"] = not_evaluated
+    summary["complete"] = not any(not_evaluated.values())
     if (relevance := relevance_tally(out)) is not None:
         targets["human_relevance"] = relevance_met(relevance)
         summary["relevance"] = relevance
@@ -384,6 +487,18 @@ def markdown(summary: dict[str, Any]) -> str:
         f"Generated {summary['generated_at']} from snapshot data with real providers.",
         "",
     ]
+    if not summary.get("complete", True):
+        missing = summary["not_evaluated"]
+        runs = ", ".join(f"{r['query']} {r['order']} #{r['run']}" for r in missing["runs"]) or "none"
+        lines += [
+            f"**Incomplete: not evaluated because {REDO_REASON}.** The gates below cover only what was "
+            "evaluated; this is not a full pass.",
+            "",
+            f"- Runs ({len(missing['runs'])}): {runs}",
+            f"- Resilience scenarios: {', '.join(missing['scenarios']) or 'none'}",
+            f"- Judges: {', '.join(missing['judges']) or 'none'}",
+            "",
+        ]
     lines += [
         "| Hard gate | Result |",
         "|---|---|",
@@ -475,16 +590,24 @@ def markdown(summary: dict[str, Any]) -> str:
     if resilience := summary.get("resilience"):
         lines += ["", "## Provider resilience", "", "| Scenario | Expected | Result |", "|---|---|---|"]
         for r in resilience:
-            result = (
-                r.get("not_applicable")
-                and f"n/a: {r['not_applicable']}"
-                or (
-                    f"pass ({r['status']}, answered by {', '.join(r['answered_by']) or 'none'})"
-                    if r["passed"]
-                    else f"**FAIL**: {'; '.join(r['problems'])}"
-                )
-            )
+            if r.get("not_applicable"):
+                result = f"n/a: {r['not_applicable']}"
+            elif r.get("account_outage"):
+                result = "not evaluated: a provider account had no credits"
+            elif r["passed"]:
+                result = f"pass ({r['status']}, answered by {', '.join(r['answered_by']) or 'none'})"
+            else:
+                result = f"**FAIL**: {'; '.join(r['problems'])}"
             lines.append(f"| {r['name'].replace('_', ' ')} | {r['expected']} | {result} |")
+    replaced = summary.get("replaced", {})
+    if any(replaced.values()):
+        lines += [
+            "",
+            f"**Re-run because {REDO_REASON}:** {len(replaced['runs'])} run(s), "
+            f"scenarios: {', '.join(replaced['scenarios']) or 'none'}, "
+            f"judges: {', '.join(replaced['judges']) or 'none'}. "
+            "Chosen from the call ledger, not from the outcome; each replacement records what it replaced.",
+        ]
     if relevance := summary.get("relevance"):
         lines += [
             "",
@@ -506,9 +629,14 @@ def markdown(summary: dict[str, Any]) -> str:
             "| Judge | Judged | Recall | False positives | Missed |",
             "|---|---|---|---|---|",
         ]
+        total = sum(len(group) for group in judge_suite.SENTENCES.values())
         for j in judges:
             missed = [s for c in j["categories"].values() for s in c["missed"]]
-            total = sum(len(group) for group in judge_suite.SENTENCES.values())
+            if j["unjudged"] == total:
+                lines.append(
+                    f"| {j['judge']} | 0/{total} | not evaluated: the provider gave no verdicts | | |"
+                )
+                continue
             lines.append(
                 f"| {j['judge']} | {total - j['unjudged']}/{total} | {j['recall']:.0%} "
                 f"| {j['false_positive_rate']:.0%} "
@@ -613,12 +741,15 @@ def relevance_sheet(out: Path) -> str:
 
 async def _main(args: argparse.Namespace) -> int:
     out: Path = args.out
+    new_golden_runs = "golden" in args.phases and not (args.rescore or args.redo)
     series = await golden_series()
     env = await Environment.open()
     try:
         await env.faults.switch_off()
         if args.rescore:
             await rescore(env, series, out)
+        elif args.redo:
+            new_golden_runs = await redo_phase(env, series, out, args.concurrency)
         else:
             if "golden" in args.phases:
                 await golden_phase(env, series, args.orders, args.runs, args.queries, args.concurrency, out)
@@ -628,15 +759,15 @@ async def _main(args: argparse.Namespace) -> int:
                 await judge_phase(series, out)
     finally:
         await env.close()
-    if "golden" in args.phases and not args.rescore:
-        # New golden runs get a new, unmarked sheet before they are summarised; a re-score keeps
-        # the reviewer's marks.
+    if new_golden_runs:
+        # New golden runs get a new, unmarked sheet before they are summarised; a re-score, or a
+        # redo that leaves the golden runs alone, keeps the reviewer's marks.
         (out / "relevance_review.md").write_text(relevance_sheet(out))
     summary = summarise(out)
     _write_json(out / "live.json", summary)
     (out / "live.md").write_text(markdown(summary))
     print(markdown(summary))
-    return 0 if summary["hard_gates_passed"] else 1
+    return 0 if summary["hard_gates_passed"] and summary["complete"] else 1
 
 
 def main() -> int:
@@ -650,6 +781,9 @@ def main() -> int:
     parser.add_argument("--concurrency", type=int, default=1, help="concurrent runs per provider order")
     parser.add_argument("--out", type=Path, default=golden_dir().parent / "results" / "live")
     parser.add_argument("--rescore", action="store_true", help="score the stored runs again, no LLM calls")
+    parser.add_argument(
+        "--redo", action="store_true", help="run again only what a provider account outage spoiled"
+    )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     return asyncio.run(_main(args))

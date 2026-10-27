@@ -109,6 +109,8 @@ def test_a_new_golden_batch_starts_with_an_unreviewed_sheet(tmp_path, monkeypatc
     results = golden_dir().parent / "results" / "live"
     for name in ("runs.jsonl", "relevance_review.md", "resilience.json", "judge.json"):
         shutil.copyfile(results / name, tmp_path / name)
+    sheet = tmp_path / "relevance_review.md"
+    sheet.write_text(sheet.read_text().replace("- [ ] Relevant", "- [x] Relevant"))
     assert live.relevance_tally(tmp_path) is not None
 
     async def nothing(*args, **kwargs):
@@ -129,6 +131,7 @@ def test_a_new_golden_batch_starts_with_an_unreviewed_sheet(tmp_path, monkeypatc
     args = SimpleNamespace(
         out=tmp_path,
         rescore=False,
+        redo=False,
         phases=["golden"],
         orders=list(live.ORDERS),
         runs=3,

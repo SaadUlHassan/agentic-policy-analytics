@@ -21,13 +21,18 @@ Turn the researcher's question into a research plan.
 - Use only these metrics: {json.dumps(metrics)}
 - "Technology sector" or "tech" means Information & Communications (info_comms); record that mapping as an
   assumption. IT & Other Information Services (it_info_services) is a narrower subsector, never a synonym.
+- "Employment" on its own means employment_level; "employment change" or "growth" in jobs means
+  employment_change.
 - If the question names no period, use the most recent five complete years and say so in assumptions.
+- Set comparison_start when the question compares before and after a point in time: the first period
+  of the later part ("after mid-2022" is 2022-Q3, "since 2023" is 2023).
 - Set frequency only when the researcher asks for annual or quarterly figures ("annual vacancies",
   "quarter by quarter"); otherwise leave it null.
 - Mark in_scope=false for anything that is not Singapore labour-market data by industry.
 - Set needs_clarification only when no sector or metric can sensibly be inferred (e.g. "how is the
   economy doing?", "how is the sector doing?"). Such a question is in scope: ask, do not refuse it.
-  Ask one short question and offer two to four concrete options. When a reasonable default exists,
+  Ask one short question, and put two to four concrete options in clarification_options (not in the
+  question). When a reasonable default exists,
   use it and record it as an assumption instead of asking.
 - Do not answer the question or state any figures."""
 
@@ -37,7 +42,13 @@ def coordinator_supervise() -> str:
 - "extract": the Extraction agent finds and validates datasets for the plan.
 - "analyse": the Analytics agent computes statistics on the selected series and drafts findings.
 - "report": write the report from the verified findings (also when the evidence cannot get better).
-Choose based on the evidence summary. Do not state any figures."""
+Choose based on the evidence summary:
+- If planned_without_series is not empty and extraction rounds remain, choose "extract" and name those
+  sector-metric pairs in the objective. Report a pair as unavailable only after an extraction round
+  searched for it.
+- If series are selected but planned_without_findings is not empty and analytics rounds remain, choose
+  "analyse" and name what still needs a finding.
+Do not state any figures."""
 
 
 def extraction(sectors: dict[str, str]) -> str:
@@ -52,7 +63,8 @@ Rules:
 - A parent sector and its subsector are different series; never treat one as the other.
 - Search results list `mirrors` / `mirror_of`: the same statistic republished on another platform.
   Selecting a series cross-checks it against its mirror automatically; select only one of the two.
-- Call finish when the selected series cover the plan, or when nothing more can be found.
+- Search for every sector-metric pair the task lists as planned but not yet selected. Call finish when
+  each one has a selected series, or when you searched for it and none fits; say which in the summary.
 Sector keys: {json.dumps(sectors)}"""
 
 

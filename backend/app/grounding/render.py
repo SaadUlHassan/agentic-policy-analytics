@@ -6,7 +6,7 @@ from app.analytics.results import Computation, ResultField, ValueKind
 from app.grounding.contracts import Assertion, Claim
 from app.grounding.predicates import PREDICATES
 
-DISPLAY_ROUNDING_VERSION = "1"
+DISPLAY_ROUNDING_VERSION = "2"
 
 _SCALE_WORDS = {1000: "thousand"}
 _PER_YEAR = "_per_year"
@@ -42,18 +42,17 @@ def render_assertion(assertion: Assertion, computation: Computation) -> str:
         "value": format_field(field, magnitude=predicate.sign is not None),
         "t0": field.interval.start,
         "t1": field.interval.end,
-        **{
-            k: computation.params.get(f"{w}_{e}", "")
-            for k, w, e in (
-                ("a0", "a", "start"),
-                ("a1", "a", "end"),
-                ("b0", "b", "start"),
-                ("b1", "b", "end"),
-            )
-        },
+        "window": _window(field.interval.start, field.interval.end),
+        "a_window": _window(computation.params.get("a_start", ""), computation.params.get("a_end", "")),
+        "b_window": _window(computation.params.get("b_start", ""), computation.params.get("b_end", "")),
         **_correlation_slots(assertion, computation),
     }
     return predicate.template.format(**values)
+
+
+def _window(start: str, end: str) -> str:
+    """ "2022-Q3 to 2024-Q4", or "2023" for a window of one period."""
+    return start if start == end else f"{start} to {end}"
 
 
 def _mid_sentence(subject: str) -> str:

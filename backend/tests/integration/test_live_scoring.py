@@ -290,3 +290,89 @@ async def test_a_run_that_could_not_be_scored_fails_runs_completed(stored, tmp_p
     summary = live.summarise(tmp_path)
     assert summary["gates"] == {"runs_completed": False, "provider_resilience": True}
     assert not summary["hard_gates_passed"]
+
+
+async def test_a_redo_replaces_only_runs_the_ledger_shows_an_account_outage_spoiled(
+    sessions, tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from app.db.models import LLMCall
+    from tests.integration.test_lifecycle import _new
+
+    golden_run, _ = await _new(sessions)
+    spoiled, _ = await _new(sessions)
+    failed_otherwise, _ = await _new(sessions)
+    async with sessions() as session:
+        for analysis_id, error in [
+            # As the ledger keeps it: cut at 200 characters, before OpenAI's error code.
+            (
+                spoiled,
+                "OpenAIRateLimitError: Error code: 429 - {'error': {'message': 'You have no credits "
+                "remaining. Add credits to continue using the API at https://platform.openai.com/settings/organizati",
+            ),
+            (failed_otherwise, "TimeoutError: no reply"),  # a product-side failure stays as it was
+        ]:
+            session.add(
+                LLMCall(
+                    analysis_id=analysis_id,
+                    agent="analytics",
+                    purpose="react_step",
+                    provider="openai",
+                    model="gpt-5.5",
+                    ok=False,
+                    latency_ms=1,
+                    error=error,
+                )
+            )
+        await session.commit()
+    records = [
+        {"query_id": "G01", "order": "bedrock", "run": 0, "analysis_id": golden_run, "clarification": None},
+        {"query_id": "G01", "order": "openai", "run": 1, "analysis_id": spoiled, "clarification": None},
+        {
+            "query_id": "G02",
+            "order": "openai",
+            "run": 2,
+            "analysis_id": failed_otherwise,
+            "clarification": None,
+        },
+    ]
+    (tmp_path / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+
+    async def fresh(env, series, query, order, index):
+        return {
+            "query_id": query["id"],
+            "order": order,
+            "run": index,
+            "analysis_id": "fresh",
+            "clarification": None,
+        }
+
+    monkeypatch.setattr(live, "_golden_run", fresh)
+    replaced_golden = await live.redo_phase(SimpleNamespace(sessions=sessions), {}, tmp_path, concurrency=1)
+
+    after = [json.loads(line) for line in (tmp_path / "runs.jsonl").read_text().splitlines()]
+    assert not replaced_golden
+    assert [r["analysis_id"] for r in after] == [golden_run, "fresh", failed_otherwise]
+    assert after[1]["replaces"] == {"analysis_id": spoiled, "reason": live.REDO_REASON}
+    assert "replaces" not in after[0] and "replaces" not in after[2]
+
+
+async def test_an_account_outage_is_reported_as_not_evaluated_never_as_a_pass(stored, tmp_path):
+    good = score(stored, _expect("G01"), await golden_series(), None)
+    spoiled = {**good, "account_outage": True, "completed": False, "retained_failures": ["k1: text differs"]}
+    record = {"query_id": "G01", "order": "bedrock", "analysis_id": "a", "clarification": None}
+    (tmp_path / "runs.jsonl").write_text(
+        json.dumps({**record, "run": 0, "score": good})
+        + "\n"
+        + json.dumps({**record, "run": 1, "analysis_id": "b", "score": spoiled})
+        + "\n"
+    )
+
+    summary = live.summarise(tmp_path)
+
+    assert summary["not_evaluated"]["runs"] == [{"query": "G01", "order": "bedrock", "run": 1}]
+    assert not summary["complete"]
+    assert summary["gates"]["runs_completed"]  # the spoiled run does not count either way...
+    assert not summary["gates"]["retained_claim_correctness"]  # ...but what it stored is still checked
+    assert "Incomplete: not evaluated" in live.markdown(summary)

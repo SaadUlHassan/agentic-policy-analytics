@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -11,6 +12,7 @@ from app.data.taxonomy import Taxonomy
 
 SCHEME = "SSIC2020"
 MAX_CLARIFICATION_OPTIONS = 4
+MAX_QUESTION_CHARS = 200
 
 
 class ResearchPlan(BaseModel):
@@ -23,6 +25,11 @@ class ResearchPlan(BaseModel):
     metrics: list[str] = Field(default=[], description="Metric names from the allowed list")
     start_year: int | None = Field(default=None, description="First year of the period of interest")
     end_year: int | None = Field(default=None, description="Last year of the period of interest")
+    comparison_start: str | None = Field(
+        default=None,
+        description="If the question compares before and after a point in time, the first period of "
+        "the later part, e.g. '2022-Q3' for 'after mid-2022' or '2023' for 'since 2023'; otherwise null",
+    )
     frequency: Literal["annual", "quarterly"] | None = Field(
         default=None,
         description="Only if the researcher asks for annual or quarterly figures; otherwise null",
@@ -55,26 +62,72 @@ def vocabulary(catalog: Catalog, taxonomy: Taxonomy) -> tuple[dict[str, str], di
 
 
 def validate_plan(plan: ResearchPlan, sectors: dict[str, str], metrics: dict[str, str]) -> list[str]:
-    """Problems with a plan the LLM produced; empty when it only uses known vocabulary."""
+    """Problems with a plan the LLM produced; empty when it only uses known vocabulary. A plan that
+    asks the researcher may leave the sector or metric open: that is what it asks about."""
     problems = [f"unknown sector {s!r}" for s in plan.sectors if s not in sectors]
     problems += [f"unknown metric {m!r}" for m in plan.metrics if m not in metrics]
     if plan.in_scope:
-        if not plan.sectors:
+        if not plan.sectors and not plan.needs_clarification:
             problems.append("no sector chosen")
-        if not plan.metrics:
+        if not plan.metrics and not plan.needs_clarification:
             problems.append("no metric chosen")
         if plan.start_year and plan.end_year and plan.start_year > plan.end_year:
             problems.append("start_year is after end_year")
-    if plan.needs_clarification and len(plan.clarification_options) > MAX_CLARIFICATION_OPTIONS:
+    return problems
+
+
+def clarification_problems(plan: ResearchPlan) -> list[str]:
+    """How a question for the researcher should be put. Asked to be fixed, never a reason to refuse."""
+    if not plan.needs_clarification:
+        return []
+    problems = []
+    if len(plan.clarification_options) > MAX_CLARIFICATION_OPTIONS:
         problems.append(
             f"offer at most {MAX_CLARIFICATION_OPTIONS} clarification options, "
             f"not {len(plan.clarification_options)}"
         )
+    if len(plan.clarification_question) > MAX_QUESTION_CHARS:
+        problems.append(
+            "ask one short question; put the choices in clarification_options, not in the question"
+        )
     return problems
 
 
+def shorten_question(plan: ResearchPlan) -> ResearchPlan:
+    """A question that still lists its choices after a repair is cut to its first sentence: the
+    choices are shown as options."""
+    if len(plan.clarification_question) <= MAX_QUESTION_CHARS:
+        return plan
+    first = re.match(r"[^?.]*[?.]", plan.clarification_question)
+    question = first.group(0) if first else plan.clarification_question[:MAX_QUESTION_CHARS]
+    return plan.model_copy(update={"clarification_question": question.strip()})
+
+
 def cap_options(plan: ResearchPlan) -> ResearchPlan:
-    """A long option list is shortened: it is never a reason to refuse the question."""
+    """The last resort for a long option list: shortened, never a reason to refuse the question."""
     return plan.model_copy(
         update={"clarification_options": plan.clarification_options[:MAX_CLARIFICATION_OPTIONS]}
+    )
+
+
+# A year the question names as part of its period ("SSIC 2020" names a classification, not a year).
+_YEAR = re.compile(r"(?<!SSIC )(?<!SSIC)\b(19\d{2}|20\d{2})\b")
+
+
+def align_period(plan: ResearchPlan, question: str, latest_year: int) -> ResearchPlan:
+    """The plan's period covers the years the question names: it starts at the earliest and runs at
+    least to the latest, or to `latest_year` (the last complete year) when the question asks about
+    what came after or since it. A model's 'last five years' must not replace the researcher's period."""
+    years = [int(y) for y in _YEAR.findall(question)]
+    if not plan.in_scope or not years:
+        return plan
+    last = max(years)
+    open_ended = re.search(rf"\b(after|since)\b[^?.]*\b{last}\b", question, re.IGNORECASE)
+    start, end = min(years), max(plan.end_year or last, latest_year if open_ended else last)
+    if (start, end) == (plan.start_year, plan.end_year):
+        return plan
+    had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
+    note = f"The period was set to {start}-{end} to match the years in the question (the plan had {had})."
+    return plan.model_copy(
+        update={"start_year": start, "end_year": end, "assumptions": [*plan.assumptions, note]}
     )

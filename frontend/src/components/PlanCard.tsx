@@ -17,6 +17,7 @@ export function PlanCard({ plan }: { plan: Plan }) {
           <dd>
             {plan.start_year}–{plan.end_year}
             {plan.frequency && `, ${plan.frequency} figures`}
+            {plan.comparison_start && `, comparing from ${plan.comparison_start}`}
           </dd>
         </dl>
       ) : (

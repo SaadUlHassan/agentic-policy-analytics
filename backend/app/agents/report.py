@@ -9,11 +9,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.agents.evidence import ConsistencyCheck, EvidenceStore
-from app.agents.plan import ResearchPlan
+from app.agents.plan import SCHEME, ResearchPlan
 from app.agents.tools import plan_window
 from app.analytics.results import Refusal
 from app.connectors.catalog import get_catalog
 from app.data.models import NormalizedDataset, QualityIssue
+from app.data.taxonomy import get_taxonomy
 from app.grounding.checks import check_free_text
 from app.grounding.citations import CitationIndex, EvidenceRef, claim_refs
 from app.grounding.render import DISPLAY_ROUNDING_VERSION, render_claim
@@ -102,7 +103,11 @@ def build_report(
         "coverage": coverage,
         "limitations": [
             *[
-                {"source": "coverage", "text": f"No verified finding covers {gap['label']}."}
+                {
+                    "source": "coverage",
+                    "text": f"No verified finding covers {gap['label']}: "
+                    f"{_why_uncovered(gap['sector'], gap['metric'], plan, evidence)}.",
+                }
                 for gap in coverage["uncovered"]
             ],
             *limitations,
@@ -162,7 +167,8 @@ def _coverage(plan: ResearchPlan, evidence: EvidenceStore) -> dict[str, Any]:
         for a in claim.assertions.values()
         for ref in evidence.computations[a.computation_id].inputs
     }
-    labels = {s.source.identity.sector: s.source.identity.sector_label for s in evidence.selected.values()}
+    labels = {s.key: s.label for s in get_taxonomy().sectors(SCHEME)}
+    labels |= {s.source.identity.sector: s.source.identity.sector_label for s in evidence.selected.values()}
 
     def label(sector: str, metric: str) -> str:
         return f"{metric.replace('_', ' ')} in {labels.get(sector, sector.replace('_', ' '))}"
@@ -174,6 +180,36 @@ def _coverage(plan: ResearchPlan, evidence: EvidenceStore) -> dict[str, Any]:
             {"sector": s, "metric": m, "label": label(s, m)} for s, m in planned if (s, m) not in covered
         ],
     }
+
+
+def _why_uncovered(sector: str, metric: str, plan: ResearchPlan, evidence: EvidenceStore) -> str:
+    """Why a planned sector x metric has no finding, from the fetched data itself (never from an
+    agent's wording): what the datasets that carry such a series cover, against the planned window."""
+    if any(
+        x.source.identity.sector == sector and x.source.identity.metric == metric
+        for x in evidence.selected.values()
+    ):
+        return "a series was selected, but no finding about it was verified"
+    reasons: dict[str, str] = {}
+    for dataset in evidence.datasets.values():
+        for series in dataset.identified_series():
+            identity = series.identity
+            if identity is None or (identity.sector, identity.metric) != (sector, metric):
+                continue
+            window = plan_window(plan, identity.frequency)
+            values = series.value_map()
+            observed = [o.period for o in series.observations if o.value is not None]
+            if all(p in values and values[p].value is not None for p in window):
+                reasons.setdefault(
+                    dataset.dataset_id, f"{dataset.dataset_id} has it, but it was not selected"
+                )
+            else:
+                span = f"for {observed[0]} to {observed[-1]}" if observed else "with no values"
+                reasons.setdefault(
+                    dataset.dataset_id,
+                    f"{dataset.dataset_id} has it only {span}, not for all of {window[0]} to {window[-1]}",
+                )
+    return "; ".join(reasons.values()) or "no dataset fetched for this analysis has such a series"
 
 
 def _charts(plan: ResearchPlan, evidence: EvidenceStore, citations: CitationIndex) -> list[dict[str, Any]]:

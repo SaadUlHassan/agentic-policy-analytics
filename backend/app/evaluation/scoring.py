@@ -39,6 +39,16 @@ from app.grounding.predicates import PREDICATES
 from app.grounding.render import render_claim
 
 AGENTS = ("coordinator", "extraction", "analytics")
+# What a provider says when the account, not the product, is at fault (OpenAI: no credits left). The
+# ledger keeps the first 200 characters of an error, where OpenAI's message comes before its code.
+ACCOUNT_REFUSALS = ("insufficient_quota", "You have no credits remaining")
+
+
+def account_outage(stored: Stored) -> bool:
+    """A provider account refused a call of this run: what the run shows is the account, not the product."""
+    return any(marker in (c.error or "") for c in stored.calls for marker in ACCOUNT_REFUSALS)
+
+
 COMPLETED = {AnalysisStatus.COMPLETED, AnalysisStatus.COMPLETED_WITH_LIMITATIONS}
 
 
@@ -445,6 +455,7 @@ def score(
     return {
         "status": stored.analysis.status,
         "completed": completed,
+        "account_outage": account_outage(stored),
         "error": stored.analysis.error,
         "plan": {
             k: plan.get(k) for k in ("in_scope", "sectors", "metrics", "start_year", "end_year", "intent")

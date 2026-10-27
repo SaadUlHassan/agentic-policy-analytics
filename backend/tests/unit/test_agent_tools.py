@@ -9,7 +9,15 @@ import respx
 from pydantic import ValidationError
 
 from app.agents.context import AgentContext
-from app.agents.plan import ResearchPlan, cap_options, validate_plan, vocabulary
+from app.agents.plan import (
+    ResearchPlan,
+    align_period,
+    cap_options,
+    clarification_problems,
+    shorten_question,
+    validate_plan,
+    vocabulary,
+)
 from app.agents.tools import analytics_tools, extraction_tools
 from app.connectors import singstat
 from app.connectors.catalog import get_catalog
@@ -97,15 +105,45 @@ async def test_a_series_at_another_frequency_than_the_plan_asks_for_is_refused()
     assert not ctx.evidence.selected
 
 
-def test_a_long_clarification_option_list_is_a_plan_problem_and_is_capped():
-    plan = PLAN.model_copy(
-        update={"needs_clarification": True, "clarification_options": [f"option {i}" for i in range(15)]}
+def test_how_a_question_is_put_is_asked_to_be_fixed_but_never_refuses_it():
+    asking = PLAN.model_copy(
+        update={
+            "sectors": [],
+            "needs_clarification": True,
+            "clarification_question": "Which sector? " + ", ".join(f"option {i}" for i in range(40)),
+            "clarification_options": [f"option {i}" for i in range(15)],
+        }
     )
     sectors, metrics = vocabulary(get_catalog(), get_taxonomy())
-    assert validate_plan(plan, sectors, metrics) == ["offer at most 4 clarification options, not 15"]
-    capped = cap_options(plan)
-    assert capped.clarification_options == ["option 0", "option 1", "option 2", "option 3"]
-    assert validate_plan(capped, sectors, metrics) == []
+    # The sector is what it asks about, so its absence is not a vocabulary problem.
+    assert validate_plan(asking, sectors, metrics) == []
+    assert clarification_problems(asking) == [
+        "offer at most 4 clarification options, not 15",
+        "ask one short question; put the choices in clarification_options, not in the question",
+    ]
+    assert cap_options(asking).clarification_options == ["option 0", "option 1", "option 2", "option 3"]
+    assert shorten_question(asking).clarification_question == "Which sector?"
+    # Without a question, a missing sector is still a problem.
+    assert validate_plan(PLAN.model_copy(update={"sectors": []}), sectors, metrics) == ["no sector chosen"]
+
+
+@pytest.mark.parametrize(
+    ("question", "planned", "aligned"),
+    [
+        ("Did growth weaken after mid-2022, compared with 2020 to mid-2022?", (2021, 2025), (2020, 2025)),
+        ("Did growth weaken after mid-2022, compared with 2020 to mid-2022?", (2020, 2022), (2020, 2025)),
+        ("How did employment change in 2023 compared with 2022?", (2022, 2023), (2022, 2023)),
+        ("Employment from 2020 to 2024", (2019, 2023), (2020, 2024)),
+        ("ICT employment under SSIC 2020 in 2023", (2023, 2023), (2023, 2023)),
+        ("How is the sector doing?", (2021, 2025), (2021, 2025)),
+        ("Employment from 2020 to 2024", (None, None), (2020, 2024)),
+    ],
+)
+def test_the_plan_period_covers_the_years_the_question_names(question, planned, aligned):
+    plan = PLAN.model_copy(update={"start_year": planned[0], "end_year": planned[1]})
+    result = align_period(plan, question, latest_year=2025)
+    assert (result.start_year, result.end_year) == aligned
+    assert (len(result.assumptions) > len(plan.assumptions)) == (aligned != planned)
 
 
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():
@@ -621,3 +659,111 @@ async def test_a_dataset_used_both_ways_lists_its_cross_checked_series_too():
     assert dataset["role"] == "evidence"
     assert {VACANCIES, "M184071:1.1.1@SSIC2020"} <= set(dataset["series"])
     assert any(c["code"] == "UNLISTED_MARKER" for c in dataset["checks"])
+
+
+async def test_a_coverage_gap_says_why_from_the_fetched_data():
+    from app.agents.report import _why_uncovered
+
+    ctx = _ctx()
+    tools = _tools(extraction_tools(ctx, PLAN))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M182841", "rationale": "r"})
+    early = PLAN.model_copy(update={"metrics": ["employment_level"], "start_year": 1985, "end_year": 1990})
+
+    reason = _why_uncovered("info_comms", "employment_level", early, ctx.evidence)
+    assert reason.startswith("M182841 has it only for ") and reason.endswith("not for all of 1985 to 1990")
+
+    covered = early.model_copy(update={"start_year": 2020, "end_year": 2024})
+    assert _why_uncovered("info_comms", "employment_level", covered, ctx.evidence) == (
+        "M182841 has it, but it was not selected"
+    )
+    assert _why_uncovered("info_comms", "recruitment_rate", covered, ctx.evidence) == (
+        "no dataset fetched for this analysis has such a series"
+    )
+
+
+class _Choosing:
+    """A router whose only answer is the given option choice (or an outage)."""
+
+    def __init__(self, options=None):
+        self.options = options
+
+    async def structured(self, schema, messages, **kwargs):
+        from app.llm.router import LLMUnavailable
+
+        if self.options is None:
+            raise LLMUnavailable("down")
+        return schema(options=self.options)
+
+
+@pytest.mark.parametrize(
+    ("answer", "offered"),
+    [
+        (
+            ["Information & Communications", "Manufacturing"],
+            ["Information & Communications", "Manufacturing"],
+        ),
+        (["Information & Communications", "Something invented", "Construction"], None),  # stays a subset
+        (["Information & Communications"], "first four"),  # fewer than two: fall back
+        (None, "first four"),  # provider down: fall back
+    ],
+)
+async def test_too_many_options_are_chosen_from_not_cut(answer, offered):
+    from app.agents.graph import _choose_options
+
+    sectors = [
+        "Services",
+        "Manufacturing",
+        "Construction",
+        "Retail",
+        "Information & Communications",
+        "Finance",
+    ]
+    plan = PLAN.model_copy(update={"needs_clarification": True, "clarification_options": sectors})
+    ctx = _ctx()
+    ctx.router = _Choosing(answer)
+
+    chosen = (await _choose_options(ctx, "How is the sector doing?", plan)).clarification_options
+
+    if offered == "first four":
+        assert chosen == sectors[:4]
+    elif offered is None:
+        assert chosen == ["Information & Communications", "Construction"]
+    else:
+        assert chosen == offered
+
+
+@pytest.mark.parametrize(
+    ("comparison_start", "split"),
+    [
+        ("2022-Q3", ("2022-Q2", "2022-Q3")),
+        (None, ("2022-Q2", "2022-Q3")),
+        ("2023-Q1", ("2022-Q4", "2023-Q1")),
+        ("2019-Q1", ("2022-Q2", "2022-Q3")),
+    ],  # outside the window: halves
+)
+def test_a_period_comparison_splits_where_the_question_does(comparison_start, split):
+    from app.agents.tools import suggested_computations
+    from app.data.identity import MeasureType
+
+    window = [f"{y}-Q{q}" for y in range(2020, 2025) for q in range(1, 5)]
+    compare = suggested_computations(MeasureType.FLOW, window, comparison_start)[1]
+    assert (compare["a_end"], compare["b_start"]) == split
+    assert (compare["a_start"], compare["b_end"]) == ("2020-Q1", "2024-Q4")
+
+
+async def test_the_coordinator_sees_planned_pairs_without_a_series():
+    from app.agents.graph import _evidence_summary
+
+    ctx = _ctx()
+    ctx.plan = PLAN.model_copy(update={"metrics": ["employment_level", "job_vacancies"]})
+    tools = _tools(extraction_tools(ctx, ctx.plan))
+    await tools["fetch_dataset"].ainvoke({"dataset_id": "M184071", "rationale": "r"})
+    await tools["select_series"].ainvoke({"series_key": VACANCIES, "reason": "fits", "rationale": "r"})
+
+    summary = _evidence_summary(ctx, {"extraction": 1, "analytics": 0})
+
+    assert summary["planned_without_series"] == ["employment_level in info_comms"]
+    assert summary["planned_without_findings"] == [
+        "employment_level in info_comms",
+        "job_vacancies in info_comms",
+    ]

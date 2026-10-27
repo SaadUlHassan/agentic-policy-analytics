@@ -21,8 +21,8 @@ class Predicate:
     value_kinds: frozenset[ValueKind]
     claim_kinds: frozenset[ClaimKind]
     sign: Sign
-    # Placeholders: {subject} {value} {t0} {t1}; compare_periods adds {a0} {a1} {b0} {b1};
-    # correlate adds {subject_b} {lag_phrase} {measure} {n}.
+    # Placeholders: {subject} {value} {t0} {t1} {window} (t0 to t1, or one period); compare_periods
+    # adds {a_window} {b_window}; correlate adds {subject_b} {lag_phrase} {measure} {n}.
     template: str
     description: str
     # Strength rule on |value| (correlations): at least `min_abs`, or below `max_abs`.
@@ -72,7 +72,8 @@ _REGISTRY = [
     _p("flow.at", {"value_at"}, {ValueKind.FLOW}, _MEASURED, sign=None,
        template="{subject} was {value} in {t1}", description="the net change recorded for one period"),
     _p("flow.total", {"cumulative"}, {ValueKind.TOTAL}, _COMPARISON, sign=None,
-       template="{subject} totalled {value} between {t0} and {t1}",
+       # A sum of each period's net change, never a change from one period to another.
+       template="{subject} summed to {value} over {window}",
        description="the summed net change of a flow over a window"),
     _p("change.increase", _CHANGE_TOOLS, _CHANGE_KINDS, _COMPARISON, sign="positive",
        template="{subject} rose by {value} between {t0} and {t1}", description="a rise between two periods"),
@@ -91,10 +92,10 @@ _REGISTRY = [
        template="{subject} trended downward by about {value} between {t0} and {t1}",
        description="a fitted downward trend"),
     _p("period.higher", {"compare_periods"}, {ValueKind.DIFFERENCE}, _COMPARISON, sign="positive",
-       template="{subject} averaged {value} more in {b0} to {b1} than in {a0} to {a1}",
+       template="{subject} averaged {value} more in {b_window} than in {a_window}",
        description="a higher average in a later window"),
     _p("period.lower", {"compare_periods"}, {ValueKind.DIFFERENCE}, _COMPARISON, sign="negative",
-       template="{subject} averaged {value} less in {b0} to {b1} than in {a0} to {a1}",
+       template="{subject} averaged {value} less in {b_window} than in {a_window}",
        description="a lower average in a later window"),
     _p("assoc.positive", {"correlate"}, {ValueKind.COEFFICIENT}, _ASSOCIATION, sign="positive",
        template="{subject} and {subject_b}{lag_phrase} tended to be higher together " + _ASSOC_TAIL,

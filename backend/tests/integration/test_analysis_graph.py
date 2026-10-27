@@ -424,7 +424,8 @@ async def test_unanswered_planned_metric_is_a_limitation_not_completed(sessions,
     ]
     assert report["limitations"][0] == {
         "source": "coverage",
-        "text": "No verified finding covers job vacancies in Information & Communications.",
+        "text": "No verified finding covers job vacancies in Information & Communications: "
+        "a series was selected, but no finding about it was verified.",
     }
 
 
@@ -980,3 +981,100 @@ async def test_fallback_events_say_the_outage_was_injected(sessions, database_ur
         e["title"] == "bedrock switched off (injected fault (demo)); answered by openai" for e in fallbacks
     )
     assert all("injected fault (demo)" in e["detail"]["reason"] for e in fallbacks)
+
+
+async def test_proceeding_without_a_sector_plans_again_with_a_default(sessions, database_url, checkpoints):
+    # "How is the sector doing?": the question is about the sector, so there is no plan to proceed with.
+    open_question = {**AMBIGUOUS_PLAN, "sectors": [], "clarification_question": "Which sector do you mean?"}
+    analysis_id, intent = await _start(sessions)
+    paused = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models={"bedrock": ScriptedChatModel(replies=[tool_call("ResearchPlan", open_question)])},
+    )
+    assert paused == "awaiting_input"
+    question = next(e for e in await _events(sessions, analysis_id) if e["type"] == "clarification")
+
+    await submit_clarification(sessions, analysis_id, question["detail"]["version"], {"proceed": True})
+    # The re-plan still says it would like to ask: once the researcher has chosen, it does not ask again.
+    planner = ScriptedChatModel(
+        replies=[
+            tool_call("ResearchPlan", {**AMBIGUOUS_PLAN, "needs_clarification": True}),
+            *_happy_path_script()[1:],
+        ]
+    )
+    status = await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        await _resume_intent(sessions, analysis_id),
+        "test",
+        checkpoints=checkpoints,
+        models={"bedrock": planner, "openai": ScriptedChatModel(replies=[ALL_SUPPORTED])},
+    )
+
+    assert status == "completed"
+    assert "most sensible default sector and measure" in str(planner.calls[0][-1].content)
+    assert [e["type"] for e in await _events(sessions, analysis_id)].count("clarification") == 1
+
+
+async def test_a_policy_route_gives_its_own_objective_not_the_refused_one(
+    sessions, database_url, checkpoints
+):
+    refused_objective = "Find the recruitment rate in info_comms"
+    script = [
+        tool_call("ResearchPlan", PLAN),
+        tool_call(
+            "NextAction", {"action": "extract", "objective": "Find the series", "rationale": "None yet."}
+        ),
+        act("fetch_dataset", {"dataset_id": "M182841"}),
+        act("select_series", {"series_key": EMPLOYMENT, "reason": "ICT employment, full coverage"}),
+        act("finish", {"summary": "Employment selected."}),
+        tool_call(
+            "NextAction", {"action": "extract", "objective": "Find vacancies", "rationale": "One missing."}
+        ),
+        act("finish", {"summary": "Nothing else fits."}),
+        # Both extraction rounds are used: this proposal is refused and policy routes to analytics.
+        tool_call(
+            "NextAction", {"action": "extract", "objective": refused_objective, "rationale": "Try again."}
+        ),
+        act("finish", {"summary": "No statistics drafted."}),
+        tool_call("NextAction", {"action": "report", "objective": "Write the report", "rationale": "Done."}),
+        tool_call("ReportNarrative", {"title": "ICT employment", "summary": "", "limitations": []}),
+    ]
+    planner = ScriptedChatModel(replies=script)
+    analysis_id, intent = await _start(sessions)
+    await execute(
+        sessions,
+        None,
+        _settings(database_url),
+        analysis_id,
+        intent,
+        "test",
+        checkpoints=checkpoints,
+        models={"bedrock": planner, "openai": ScriptedChatModel(replies=[ALL_SUPPORTED])},
+    )
+
+    overridden = next(
+        e["detail"]
+        for e in await _events(sessions, analysis_id)
+        if e["type"] == "decision" and e["detail"]["policy_override"]
+    )
+    assert overridden["action"] == "analyse"
+    assert (
+        overridden["objective"]
+        == "Compute statistics on the selected series and draft findings (policy route)"
+    )
+    analytics_task = next(
+        str(m.content)
+        for call in planner.calls
+        for m in call
+        if "Objective from the Coordinator: Compute" in str(m.content)
+    )
+    assert refused_objective not in analytics_task

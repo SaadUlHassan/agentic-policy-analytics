@@ -476,10 +476,13 @@ def suggested_correlations(
     return suggestions, refusals
 
 
-def suggested_computations(measure: MeasureType, window: list[str]) -> list[dict[str, str]]:
-    """Statistics that are eligible for this kind of series over the plan window, with exact arguments."""
+def suggested_computations(
+    measure: MeasureType, window: list[str], comparison_start: str | None = None
+) -> list[dict[str, str]]:
+    """Statistics that are eligible for this kind of series over the plan window, with exact arguments.
+    A period comparison splits the window where the question's later part starts, else in half."""
     start, end = window[0], window[-1]
-    half = len(window) // 2
+    half = window.index(comparison_start) if comparison_start in window[1:] else len(window) // 2
     halves = {"a_start": start, "a_end": window[half - 1], "b_start": window[half], "b_end": end}
     if measure is MeasureType.FLOW:
         return [{"tool": "cumulative", "start": start, "end": end}, {"tool": "compare_periods", **halves}]
@@ -508,7 +511,7 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                     "plan_window": [window[0], window[-1]],
                     # A pair's correlations are listed first under its leading series.
                     "suggested_computations": [c for c in correlations if c["series_key"] == key]
-                    + suggested_computations(sel.source.identity.measure_type, window),
+                    + suggested_computations(sel.source.identity.measure_type, window, plan.comparison_start),
                 }
             )
         for refusal in refusals:
