@@ -109,8 +109,9 @@ jobs:
     needs: [backend, frontend]
     runs-on: ubuntu-latest
     env:
-      # Used by the production stack only (the development compose ignores them).
-      POSTGRES_PASSWORD: ci-only-password
+      # Used by the production stack only (the development compose ignores them). The password has
+      # URL-special characters on purpose: the stack must work with any password.
+      POSTGRES_PASSWORD: "ci-only:p@ss/w%rd#?&x"
       BACKEND_IMAGE: policy-analytics-backend:local
       WEB_IMAGE: policy-analytics-web:local
     steps:
@@ -164,7 +165,9 @@ jobs:
           SOURCE: ${{ github.server_url }}/${{ github.repository }}
         run: |
           registry="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
-          version="$(echo "$GITHUB_REF_NAME" | sed 's#/#-#g')"
+          # A Docker tag is [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}: other characters become "-".
+          version="$(echo "$GITHUB_REF_NAME" | sed -e 's/[^A-Za-z0-9_.-]/-/g' -e 's/^[.-]*//' | cut -c1-128)"
+          version="${version:-ref}"
           for image in backend frontend; do
             name="agentic-policy-analytics-$([ "$image" = frontend ] && echo web || echo backend)"
             tags="-t $registry/$name:sha-$(echo "$GITHUB_SHA" | cut -c1-7) -t $registry/$name:$version"

@@ -19,7 +19,9 @@ x-backend: &backend
     APP_ENV: prod
     # Demo fault switches do not exist in production; the settings refuse them when APP_ENV=prod.
     ENABLE_FAULT_INJECTION: "false"
-    DATABASE_URL: postgresql+asyncpg://policy:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/policy
+    # The password is passed on its own and encoded by the settings, so it may contain any character.
+    DATABASE_URL: postgresql+asyncpg://policy@postgres:5432/policy
+    DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     REDIS_URL: redis://redis:6379/0
     CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     DATA_DIR: /app/data

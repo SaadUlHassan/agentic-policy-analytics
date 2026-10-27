@@ -1224,6 +1224,7 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **`docker-compose.prod.yml`** runs the published images with `APP_ENV=prod` and `ENABLE_FAULT_INJECTION=false`.
   - The settings refuse fault injection in production, so the fault routes do not exist (404).
   - The database password must be supplied (`POSTGRES_PASSWORD`), and Postgres and Redis are not published.
+  - The password is passed to the app on its own (`DATABASE_PASSWORD`) and encoded into the connection URL by the settings, so it may contain any character. Alembic's config escapes `%`. CI's production smoke uses a password with `@ : / % # ? &` to prove it.
   - The API and web ports stay on loopback, and services restart unless stopped.
   - `BACKEND_IMAGE` / `WEB_IMAGE` pin a version (e.g. `:sha-<commit>`).
   - The data directory (catalogue, taxonomy, snapshots) is mounted from the checkout.
@@ -1231,6 +1232,7 @@ All of the following was verified live: the example query on Bedrock primary, on
   - The app has no authentication: an authenticating reverse proxy is required before exposing it beyond the host.
 - **CI tests the production configuration** on the images it has just built, in the compose-smoke job. It checks the health endpoint, the settings (prod, faults off), the fault route (404), the web app and a worker job round trip.
 - **Publishing:** after every check passes on a push to `main` or a `v*` tag, the backend and web images are pushed to `ghcr.io/saadulhassan/agentic-policy-analytics-{backend,web}`, tagged `sha-<commit>` and the branch or tag name, plus `latest` from main. They carry OCI source and revision labels.
+  - Branch and tag names are normalised to Docker's tag format (other characters become `-`, at most 128 characters), e.g. `v1.0.0+build.7` becomes `v1.0.0-build.7`.
   - The job uses the Docker CLI with the workflow token, so no third-party actions are needed.
   - It never runs for pull requests.
 - **Coverage:**
