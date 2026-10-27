@@ -1,6 +1,6 @@
 # Live evaluation
 
-Generated 2026-10-27T13:54:15+00:00 from snapshot data with real providers.
+Generated 2026-10-27T14:14:40+00:00 from snapshot data with real providers.
 
 | Hard gate | Result |
 |---|---|
@@ -90,7 +90,7 @@ Mean pairwise Jaccard of selected series: 0.81.
 
 ## Human relevance review
 
-| Primary provider | Relevant | Not relevant | Unmarked |
+| Primary provider | Relevant | Not relevant | Not reviewed |
 |---|---|---|---|
 | bedrock | 9/12 | G02, G04, G09 | none |
 | openai | 11/12 | G12 | none |

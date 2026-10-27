@@ -1159,7 +1159,7 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **An ambiguous labour-market question is asked about, not refused.** Clarification options are capped at four: a longer list is shortened, never turned into a refusal. Prompt version 2.
 - **First-run problems were infrastructure, not the product.** The OpenAI account ran out of credits, and three concurrent runs throttled Bedrock. The live runner now runs the two provider orders side by side, one run at a time each, and reports the share of calls each primary answered (94% and 95%).
 
-**Human relevance review** (`eval/results/live/relevance_review.md`, target at least 10/12 per provider; the summary reads the reviewer's marks from the sheet):
+**Human relevance review** (`eval/results/live/relevance_review.md`, target at least 10/12 per provider). The summary reads the reviewer's marks from the sheet. Each entry names its analysis, so a mark counts only for the golden run it was made on: a run reviewed more than once, not at all, or on a sheet from another batch is not reviewed. A new golden batch is summarised against its own blank sheet.
 - **Results:** Bedrock 9/12 (target missed), OpenAI 11/12.
 - **Not relevant:** G02, G04 and G09 on Bedrock, and G12 on OpenAI.
 - **How it was done:** the development assistant proposed a verdict with a reason for each entry. The reviewer confirmed all 24 and marked the sheet.

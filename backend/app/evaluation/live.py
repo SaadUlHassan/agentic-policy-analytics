@@ -366,10 +366,7 @@ def summarise(out: Path) -> dict[str, Any]:
         )
         summary["judge"] = [{k: v for k, v in r.items() if k != "verdicts"} for r in judged["results"]]
     if (relevance := relevance_tally(out)) is not None:
-        # A human's marks; an unmarked or doubly marked entry is not counted as relevant.
-        targets["human_relevance"] = all(
-            t["relevant"] >= MIN_RELEVANT and not t["unmarked"] for t in relevance.values()
-        )
+        targets["human_relevance"] = relevance_met(relevance)
         summary["relevance"] = relevance
     summary["gates"], summary["targets"] = gates, targets
     summary["hard_gates_passed"] = bool(gates) and all(gates.values())
@@ -493,12 +490,12 @@ def markdown(summary: dict[str, Any]) -> str:
             "",
             "## Human relevance review",
             "",
-            "| Primary provider | Relevant | Not relevant | Unmarked |",
+            "| Primary provider | Relevant | Not relevant | Not reviewed |",
         ]
         lines += ["|---|---|---|---|"]
         lines += [
-            f"| {o} | {t['relevant']}/{t['entries']} | {', '.join(t['not_relevant']) or 'none'} "
-            f"| {', '.join(t['unmarked']) or 'none'} |"
+            f"| {o} | {t['relevant']}/{t['runs']} | {', '.join(t['not_relevant']) or 'none'} "
+            f"| {', '.join(t['not_reviewed']) or 'none'} |"
             for o, t in relevance.items()
         ]
     if judges := summary.get("judge"):
@@ -522,32 +519,56 @@ def markdown(summary: dict[str, Any]) -> str:
 
 _ENTRY = re.compile(r"(?m)^(?=## G\d\d \()")
 _HEADING = re.compile(r"## (G\d\d) \((\w+) primary\)")
+_ANALYSIS = re.compile(r"(?m)^Analysis id: (\S+)$")
 
 
 def relevance_tally(out: Path) -> dict[str, dict[str, Any]] | None:
-    """The reviewer's marks on relevance_review.md per primary provider, or None before review."""
+    """The reviewer's marks per primary provider, or None before review.
+
+    A mark counts only for the golden run it was made on: each entry names its analysis, and each
+    golden run in runs.jsonl must be reviewed exactly once. A run whose entry is missing, repeated,
+    from another batch or not marked once is listed as not reviewed."""
     path = out / "relevance_review.md"
     if not path.exists():
         return None
-    tally: dict[str, dict[str, Any]] = {}
+    golden_runs = {
+        (r["query_id"], r["order"]): r["analysis_id"]
+        for r in _read_jsonl(out / "runs.jsonl")
+        if r["run"] == 0
+    }
+    marks: dict[tuple[str, str], list[str]] = defaultdict(list)
     for entry in _ENTRY.split(path.read_text())[1:]:
-        heading = _HEADING.match(entry)
-        if heading is None:
+        heading, analysis = _HEADING.match(entry), _ANALYSIS.search(entry)
+        if heading is None or analysis is None:
             continue
+        key = (heading.group(1), heading.group(2))
+        if golden_runs.get(key) != analysis.group(1):
+            continue  # not about a golden run of this batch
         relevant = bool(re.search(r"(?m)^- \[[xX]\] Relevant", entry))
         not_relevant = bool(re.search(r"(?m)^- \[[xX]\] Not relevant", entry))
-        t = tally.setdefault(
-            heading.group(2), {"entries": 0, "relevant": 0, "not_relevant": [], "unmarked": []}
-        )
-        t["entries"] += 1
-        if relevant == not_relevant:
-            t["unmarked"].append(heading.group(1))
-        elif relevant:
+        marks[key].append("unmarked" if relevant == not_relevant else "relevant" if relevant else "not")
+    if not any(m != "unmarked" for found in marks.values() for m in found):
+        return None
+    tally: dict[str, dict[str, Any]] = {}
+    for query_id, order in sorted(golden_runs):
+        t = tally.setdefault(order, {"runs": 0, "relevant": 0, "not_relevant": [], "not_reviewed": []})
+        t["runs"] += 1
+        found = marks.get((query_id, order), [])
+        if len(found) != 1 or found[0] == "unmarked":
+            t["not_reviewed"].append(query_id)
+        elif found[0] == "relevant":
             t["relevant"] += 1
         else:
-            t["not_relevant"].append(heading.group(1))
-    reviewed = any(t["relevant"] or t["not_relevant"] for t in tally.values())
-    return tally if reviewed else None
+            t["not_relevant"].append(query_id)
+    return tally
+
+
+def relevance_met(tally: dict[str, dict[str, Any]]) -> bool:
+    """Every golden query reviewed once for both provider orders, at least MIN_RELEVANT relevant."""
+    total = len(golden()["queries"])
+    return set(tally) == set(ORDERS) and all(
+        t["runs"] == total and not t["not_reviewed"] and t["relevant"] >= MIN_RELEVANT for t in tally.values()
+    )
 
 
 def relevance_sheet(out: Path) -> str:
@@ -570,6 +591,7 @@ def relevance_sheet(out: Path) -> str:
             f"## {r['query_id']} ({r['order']} primary): {query['query']}",
             "",
             f"Covers: {query['covers']}. Status: {s['status']}.",
+            f"Analysis id: {r['analysis_id']}",
         ]
         if s["plan"]:
             p = s["plan"]
@@ -606,12 +628,13 @@ async def _main(args: argparse.Namespace) -> int:
                 await judge_phase(series, out)
     finally:
         await env.close()
+    if "golden" in args.phases and not args.rescore:
+        # New golden runs get a new, unmarked sheet before they are summarised; a re-score keeps
+        # the reviewer's marks.
+        (out / "relevance_review.md").write_text(relevance_sheet(out))
     summary = summarise(out)
     _write_json(out / "live.json", summary)
     (out / "live.md").write_text(markdown(summary))
-    if "golden" in args.phases and not args.rescore:
-        # Only new golden runs get a new sheet: a re-score must not wipe the reviewer's marks.
-        (out / "relevance_review.md").write_text(relevance_sheet(out))
     print(markdown(summary))
     return 0 if summary["hard_gates_passed"] else 1
 
