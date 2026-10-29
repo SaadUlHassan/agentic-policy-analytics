@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from app.connectors.http import api_keys
 from app.core.config import Settings
 
 
@@ -54,3 +55,12 @@ def test_offline_llm_mode_is_refused_in_production():
     assert Settings(_env_file=None, llm_mode="offline").llm_mode == "offline"
     with pytest.raises(ValidationError, match="LLM_MODE=offline"):
         Settings(_env_file=None, app_env="prod", llm_mode="offline")
+
+
+def test_an_empty_api_key_means_no_key(monkeypatch):
+    for name in ("DATAGOV_API_KEY", "OPENAI_API_KEY", "AWS_BEDROCK_API_KEY"):
+        monkeypatch.setenv(name, " ")
+    settings = Settings(_env_file=None)
+    assert settings.datagov_api_key is None and settings.openai_api_key is None
+    assert settings.aws_bedrock_api_key is None
+    assert api_keys(settings) == []  # keyless: no x-api-key header, keyless rate limits

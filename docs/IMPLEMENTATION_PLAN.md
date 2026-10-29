@@ -1282,3 +1282,15 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **Repeatability:** three earlier runs, before some of the measurement fixes above, gave the same picture (798 to 847 analyses; p95s within 25 ms of these). The first two fell behind the requested read rate (about 18 a second), and all three measured delivery from the transaction start rather than the commit.
 - **Queue wait** reflects 10 slots sharing 4 worker slots, and is what horizontal worker scaling addresses.
 - **Scope:** these numbers measure the platform (API, queue, worker, database, event delivery), not a model. Live latency and cost per analysis come from the live evaluation.
+
+## M3 outcomes: documentation (H)
+
+**Delivered:** `README.md`, `ARCHITECTURE.md`, `TESTING.md` and `DATA_SOURCES.md`, written from the code and the recorded results.
+
+- **Written from what exists, not from this plan.** Where the build differs from the plan, the documents describe the build:
+  - the API has no `datasets` or `sources` endpoints;
+  - the catalogue has nine datasets and is searched lexically, with no live SingStat search tool;
+  - WebSocket sends are awaited, so there is no per-connection buffer and no 4008 overflow close.
+- **Every number is traceable** to an artifact (`eval/results/…`, a named commit, or CI on `main`), and the incomplete PR #10 live rerun is reported as incomplete, next to the complete PR #9 run.
+- **A free way to try it:** the README's quick start offers `LLM_MODE=offline` with `DATA_MODE=snapshot`, which needs no credentials. `.env.example` now lists `LLM_MODE`.
+- **Checked:** every relative link and anchor resolves, and all six Mermaid diagrams parse and render with Mermaid 11.4.
