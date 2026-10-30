@@ -219,6 +219,18 @@ COMPARISON = "Did growth weaken after mid-2022, compared with 2020 to mid-2022?"
         (COMPARISON, "2022-Q3", "2019 to 2024", (2019, 2024), "2022-Q3"),
         # Not a comparison: the one-bound rule applies.
         ("Employment from 2020 to 2024", None, "since 2021", (2021, 2024), None),
+        # Comparing sectors is not comparing times.
+        (
+            "Compare ICT and manufacturing employment from 2020 to 2024",
+            None,
+            "since 2021",
+            (2021, 2024),
+            None,
+        ),
+        ("ICT versus construction employment, 2020 to 2024", None, "before 2023", (2020, 2022), None),
+        # A split after the latest complete year has nothing after it: the plan's split stands.
+        (COMPARISON, "2022-Q3", "after 2025", (2020, 2025), "2022-Q3"),
+        ("Compare ICT employment before and after the change", None, "since 2026", (2020, 2025), None),
     ],
 )
 def test_a_clarification_in_a_comparison_moves_the_pivot_not_the_window(
@@ -227,6 +239,14 @@ def test_a_clarification_in_a_comparison_moves_the_pivot_not_the_window(
     plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": pivot})
     result = align_period(plan, question, latest_year=2025, answer=answer)
     assert ((result.start_year, result.end_year), result.comparison_start) == (aligned, split)
+
+
+def test_a_split_after_the_latest_year_is_explained_not_applied():
+    plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": "2022-Q3"})
+    result = align_period(plan, COMPARISON, latest_year=2025, answer="after 2025")
+    assert result.assumptions[-1].startswith(
+        "The researcher's split at 2026 is after the latest complete year (2025)"
+    )
 
 
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():
