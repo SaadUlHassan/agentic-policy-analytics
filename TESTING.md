@@ -29,14 +29,14 @@ Three principles shape the tests.
 
 | Suite | Count | What it covers | Runs on |
 |---|---|---|---|
-| Backend unit (`backend/tests/unit/`) | 241 | Connectors on recorded real payloads (paging, fragment merging, discovery, throttling), identity and periods, data-quality mutations, analytics tools with eligible and ineligible fixtures for every refusal code, correlation pairing rules, grounding checks, the router (retries, fallback, circuit breaker, SDK retries off), faults, pricing, settings, agent tools, the ReAct loop | every CI run |
+| Backend unit (`backend/tests/unit/`) | 245 | Connectors on recorded real payloads (paging, fragment merging, discovery, throttling), identity and periods, data-quality mutations, analytics tools with eligible and ineligible fixtures for every refusal code, correlation pairing rules, grounding checks, the router (retries, fallback, circuit breaker, SDK retries off), faults, pricing, settings, agent tools, the ReAct loop | every CI run |
 | Backend integration (`backend/tests/integration/`) | 105 | The full graph with a scripted LLM on Postgres and Redis: lifecycle, recovery, fencing, checkpoints, clarification, cancel, the API and WebSocket, exports, offline mode, live-scoring logic | every CI run (service containers) |
 | Backend evaluation (`backend/tests/evaluation/`) | 41 | The deterministic gates, the live-evaluation scorer and suites, the load driver | every CI run |
 | Frontend unit (`frontend/tests/`) | 31 | Event merging and the resume cursor, the dashboard (series toggles, period filter, finding↔chart highlight, small multiples), report rendering and citations, the data-quality panel, the clarification card, the query form, history paging, health, usage | every CI run |
 | Browser end to end (`frontend/e2e/`) | 3 tests × 3 widths | See [Browser tests](#browser-tests) | every CI run |
 | Live tests (`-m live`) | — | Real government APIs and real models; excluded by default | on demand |
 
-**Backend: 387 tests. Frontend: 31 unit tests and 9 browser runs.** All pass in CI.
+**Backend: 391 tests. Frontend: 31 unit tests and 9 browser runs.** All pass in CI.
 
 ## Hallucination detection
 

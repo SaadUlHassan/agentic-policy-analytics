@@ -205,6 +205,14 @@ def align_period(
         else "because the question names no years, so it ends at the latest complete year"
     )
     pivot, notes = plan.comparison_start, []
+    # A pivot after the latest complete year has nothing after it, whoever chose it (the model may
+    # adopt the researcher's answer when it re-plans): the comparison splits the period in the middle.
+    if pivot is not None and int(pivot[:4]) > latest_year:
+        notes.append(
+            f"The split at {pivot} is after the latest complete year ({latest_year}), so there is "
+            f"nothing after it to compare; the comparison splits the period in the middle instead."
+        )
+        pivot = None
     named = {int(y) for y in _YEAR.findall(answer or "")}
     comparing = plan.comparison_start is not None or bool(_BEFORE_AND_AFTER.search(question))
     if named:
@@ -212,11 +220,12 @@ def align_period(
         year = next(iter(named)) if len(named) == 1 else None
         moved = _pivot(answer or "") if year is not None and comparing else None
         if moved is not None and int(moved[:4]) > latest_year:
-            notes.append(
-                f"The researcher's split at {moved} is after the latest complete year ({latest_year}), so "
-                f"there is nothing after it to compare; the comparison keeps its split at "
-                f"{plan.comparison_start or 'the middle of the period'}."
-            )
+            if moved != plan.comparison_start:  # otherwise the note above already says so
+                notes.append(
+                    f"The researcher's split at {moved} is after the latest complete year ({latest_year}), "
+                    f"so there is nothing after it to compare; the comparison keeps its split at "
+                    f"{pivot or 'the middle of the period'}."
+                )
         elif moved is not None:
             # Keep both sides of the new pivot inside the window.
             pivot, split = moved, int(moved[:4])
@@ -231,7 +240,7 @@ def align_period(
         else:
             start, end = _named_period(plan, answer or "", latest_year)
     had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
-    if pivot != plan.comparison_start:
+    if pivot is not None and pivot != plan.comparison_start:
         notes.append(
             f"The comparison was set to split at {pivot}, over {start}-{end}, {reason} "
             f"(the plan split at {plan.comparison_start or 'no point'} over {had})."

@@ -241,6 +241,24 @@ def test_a_clarification_in_a_comparison_moves_the_pivot_not_the_window(
     assert ((result.start_year, result.end_year), result.comparison_start) == (aligned, split)
 
 
+@pytest.mark.parametrize(
+    ("pivot", "answer", "split"),
+    [
+        ("2026", "after 2025", None),  # the re-plan adopted the answer's split
+        ("2026", None, None),  # the model chose it unprompted
+        ("2027", "since 2023", "2023"),  # a valid answer replaces it
+        ("2025-Q3", None, "2025-Q3"),  # inside the latest complete year: kept
+    ],
+)
+def test_a_pivot_after_the_latest_year_is_dropped_whoever_chose_it(pivot, answer, split):
+    plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": pivot})
+    result = align_period(plan, COMPARISON, latest_year=2025, answer=answer)
+    assert result.comparison_start == split
+    assert (result.start_year, result.end_year) == (2020, 2025)
+    dropped = [a for a in result.assumptions if "after the latest complete year" in a]
+    assert len(dropped) == (1 if int(pivot[:4]) > 2025 else 0)
+
+
 def test_a_split_after_the_latest_year_is_explained_not_applied():
     plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": "2022-Q3"})
     result = align_period(plan, COMPARISON, latest_year=2025, answer="after 2025")

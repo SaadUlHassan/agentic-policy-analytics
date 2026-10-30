@@ -106,7 +106,7 @@ The integration tests and the live evaluation use the compose Postgres and Redis
 
 | Command | What it runs | Needs |
 |---|---|---|
-| `make test` | 387 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
+| `make test` | 391 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
 | `make coverage` | The same, with coverage; backend core packages are gated at 80% (currently 94%) | as `make test` |
 | `make eval` | Deterministic gates: golden computations against independently computed values, refusal correctness, the adversarial verifier suite. Writes `eval/results/deterministic.{json,md}` | uv dependencies only |
 | `make e2e` | Playwright browser tests at 375, 768 and 1280 px against an isolated offline stack (ports 8200/3200), torn down afterwards | Docker, Node dependencies and Playwright's Chromium |
