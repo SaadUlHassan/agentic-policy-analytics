@@ -277,6 +277,25 @@ def test_a_comparison_that_cannot_be_made_is_recorded_not_substituted():
     )
 
 
+@pytest.mark.parametrize("in_scope", [True, False])
+def test_a_model_cannot_declare_a_comparison_unavailable(in_scope):
+    # The field is not in the model's schema, but a model can still send it: it is discarded.
+    injected = ResearchPlan.model_validate(
+        {
+            **PLAN.model_dump(),
+            "in_scope": in_scope,
+            "unavailable_comparison": "No comparison, says the model.",
+        }
+    )
+    assert injected.unavailable_comparison is not None
+    aligned = align_period(injected, "Employment from 2020 to 2024", latest_year=2025)
+    assert aligned.unavailable_comparison is None
+    assert (
+        align_period(injected, COMPARISON, latest_year=2025, answer="since 2023").unavailable_comparison
+        is None
+    )
+
+
 def test_no_period_comparison_is_suggested_or_computed_when_it_cannot_be_made():
     from app.agents.tools import suggested_computations
     from app.data.identity import MeasureType

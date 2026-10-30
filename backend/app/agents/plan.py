@@ -207,6 +207,9 @@ def align_period(
     only that bound ("start from 2018", "until 2022"), keeping the other; otherwise the answer's own
     period replaces the question's. In a before/after comparison, one year with "after", "since" or
     "before" moves the comparison's pivot instead, and the window keeps both sides of it."""
+    # Only this function may say a comparison is unavailable: whatever the model put there is discarded.
+    if plan.unavailable_comparison is not None:
+        plan = plan.model_copy(update={"unavailable_comparison": None})
     if not plan.in_scope:
         return plan
     start, end = _named_period(plan, question, latest_year)
@@ -215,7 +218,7 @@ def align_period(
         if _YEAR.search(question)
         else "because the question names no years, so it ends at the latest complete year"
     )
-    pivot, unavailable, notes = plan.comparison_start, plan.unavailable_comparison, []
+    pivot, unavailable, notes = plan.comparison_start, None, []
     # A pivot after the latest complete year has nothing after it, whoever chose it (the model may
     # adopt the researcher's answer when it re-plans). That comparison cannot be made, and no other
     # split is compared in its place: the report says so instead.
