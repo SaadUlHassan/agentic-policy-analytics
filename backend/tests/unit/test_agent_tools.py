@@ -184,6 +184,15 @@ def test_the_plan_period_covers_the_years_the_question_names(question, planned, 
         ("Employment from 2020 to 2024", "Information & Communications", (2020, 2024)),
         ("How is the sector doing?", "ICT, from 2016 to 2018", (2016, 2018)),
         ("How is the sector doing?", "Information & Communications", (2021, 2025)),
+        # One year with a direction moves only that bound.
+        ("Employment from 2020 to 2024", "start from 2018", (2018, 2024)),
+        ("Employment from 2020 to 2024", "since 2021", (2021, 2024)),
+        ("Employment from 2020 to 2024", "until 2022", (2020, 2022)),
+        ("Employment from 2020 to 2024", "only the years before 2023", (2020, 2022)),
+        ("How is the sector doing?", "ICT, starting in 2019", (2019, 2025)),
+        # A year with no direction, or a bound that would cross the other, is the whole period.
+        ("Employment from 2020 to 2024", "just 2023", (2023, 2023)),
+        ("Employment from 2020 to 2024", "until 2018", (2018, 2018)),
     ],
 )
 def test_a_clarification_that_names_years_sets_the_period(question, answer, aligned):

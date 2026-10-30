@@ -120,6 +120,38 @@ _AFTER = re.compile(
 )
 
 
+# One year in a clarification moves one bound: "start from 2018", "since 2018" / "until 2022".
+_FROM = re.compile(
+    r"\b(?:from|since|after|starting(?:\s+(?:in|from|at))?|start(?:ing)?\s+(?:in|from|at)|beginning(?:\s+in)?)"
+    r"\s+(?:mid-|early\s+|late\s+|the end of\s+)?(19\d{2}|20\d{2})\b",
+    re.IGNORECASE,
+)
+_UNTIL = re.compile(
+    r"\b(?:to|until|till|through|up to|ending(?:\s+in)?)\s+(19\d{2}|20\d{2})\b", re.IGNORECASE
+)
+
+
+def _named_period(plan: ResearchPlan, text: str, latest_year: int) -> tuple[int, int]:
+    """The period `text` names, by the rules `align_period` documents."""
+    years = [int(y) for y in _YEAR.findall(text)]
+    start: int | None
+    if not years:
+        span = plan.end_year - plan.start_year if plan.start_year and plan.end_year else 4
+        return latest_year - max(span, 0), latest_year
+    last = max(years)
+    before = [int(y) for y in _BEFORE.findall(text)]
+    if last in {int(y) for y in _AFTER.findall(text)}:
+        start, end = min(years), latest_year
+    elif before and last <= min(before):
+        end = min(before) - 1
+        start = min((y for y in years if y < min(before)), default=plan.start_year)
+    else:
+        start, end = min(years), last
+    if start is None or start > end:
+        start = end - 4
+    return start, end
+
+
 def align_period(
     plan: ResearchPlan, question: str, latest_year: int, answer: str | None = None
 ) -> ResearchPlan:
@@ -131,31 +163,30 @@ def align_period(
     - otherwise: from the earliest year named to the latest.
     A question that names no year ("recently", "the last five years") gets a period ending at
     `latest_year`, keeping the plan's span (five years when it has none): models default to stale
-    years when left to choose. A clarification `answer` that names years replaces the question's
-    period: the researcher has said which years they mean."""
+    years when left to choose.
+    A clarification `answer` that names years has the last word: one year with a direction moves
+    only that bound ("start from 2018", "until 2022"), keeping the other; otherwise the answer's own
+    period replaces the question's."""
     if not plan.in_scope:
         return plan
-    if answer and _YEAR.search(answer):
-        question = answer
-    years = [int(y) for y in _YEAR.findall(question)]
-    start: int | None
-    if not years:
-        span = plan.end_year - plan.start_year if plan.start_year and plan.end_year else 4
-        start, end = latest_year - max(span, 0), latest_year
-        reason = "because the question names no years, so it ends at the latest complete year"
-    else:
-        last = max(years)
-        before = [int(y) for y in _BEFORE.findall(question)]
-        if last in {int(y) for y in _AFTER.findall(question)}:
-            start, end = min(years), latest_year
-        elif before and last <= min(before):
-            end = min(before) - 1
-            start = min((y for y in years if y < min(before)), default=plan.start_year)
+    start, end = _named_period(plan, question, latest_year)
+    reason = (
+        "to match the years in the question"
+        if _YEAR.search(question)
+        else "because the question names no years, so it ends at the latest complete year"
+    )
+    named = {int(y) for y in _YEAR.findall(answer or "")}
+    if named:
+        reason = "to match the years in the researcher's answer"
+        year = next(iter(named)) if len(named) == 1 else None
+        if year is not None and _FROM.search(answer or "") and year <= end:
+            start = year
+        elif year is not None and _BEFORE.search(answer or "") and year - 1 >= start:
+            end = year - 1
+        elif year is not None and _UNTIL.search(answer or "") and year >= start:
+            end = year
         else:
-            start, end = min(years), last
-        if start is None or start > end:
-            start = end - 4
-        reason = "to match the years in the question"
+            start, end = _named_period(plan, answer or "", latest_year)
     if (start, end) == (plan.start_year, plan.end_year):
         return plan
     had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
