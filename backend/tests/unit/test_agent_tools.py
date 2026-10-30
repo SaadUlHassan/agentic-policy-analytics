@@ -201,6 +201,34 @@ def test_a_clarification_that_names_years_sets_the_period(question, answer, alig
     assert (result.start_year, result.end_year) == aligned
 
 
+COMPARISON = "Did growth weaken after mid-2022, compared with 2020 to mid-2022?"
+
+
+@pytest.mark.parametrize(
+    ("question", "pivot", "answer", "aligned", "split"),
+    [
+        # In a comparison, one year with after/since/before moves the pivot; the window keeps both sides.
+        (COMPARISON, "2022-Q3", "after 2023", (2020, 2025), "2024"),
+        (COMPARISON, "2022-Q3", "since 2021", (2020, 2025), "2021"),
+        (COMPARISON, "2022-Q3", "after mid-2023", (2020, 2025), "2023-Q3"),
+        (COMPARISON, "2022-Q3", "before 2021", (2020, 2025), "2021"),
+        (COMPARISON, "2022-Q3", "since 2020", (2019, 2025), "2020"),  # widened to keep a before side
+        # Unflagged by the plan but worded as a comparison.
+        ("Compare ICT employment before and after the change", None, "after 2022", (2020, 2025), "2023"),
+        # A full answer still sets the period; the pivot stays the plan's.
+        (COMPARISON, "2022-Q3", "2019 to 2024", (2019, 2024), "2022-Q3"),
+        # Not a comparison: the one-bound rule applies.
+        ("Employment from 2020 to 2024", None, "since 2021", (2021, 2024), None),
+    ],
+)
+def test_a_clarification_in_a_comparison_moves_the_pivot_not_the_window(
+    question, pivot, answer, aligned, split
+):
+    plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": pivot})
+    result = align_period(plan, question, latest_year=2025, answer=answer)
+    assert ((result.start_year, result.end_year), result.comparison_start) == (aligned, split)
+
+
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():
     ctx = _ctx()
     await _tools(extraction_tools(ctx, PLAN))["fetch_dataset"].ainvoke(

@@ -126,6 +126,12 @@ _FROM = re.compile(
     r"\s+(?:mid-|early\s+|late\s+|the end of\s+)?(19\d{2}|20\d{2})\b",
     re.IGNORECASE,
 )
+# In a before/after comparison, one year in a clarification names the pivot, not a bound.
+_PIVOT = re.compile(
+    r"\b(after|since|before|prior to)\s+(mid-|early\s+|late\s+|the end of\s+)?(19\d{2}|20\d{2})\b",
+    re.IGNORECASE,
+)
+_COMPARE = re.compile(r"\b(?:compar(?:e|ed|ing|ison)|versus|vs\.?)\b", re.IGNORECASE)
 _UNTIL = re.compile(
     r"\b(?:to|until|till|through|up to|ending(?:\s+in)?)\s+(19\d{2}|20\d{2})\b", re.IGNORECASE
 )
@@ -152,6 +158,24 @@ def _named_period(plan: ResearchPlan, text: str, latest_year: int) -> tuple[int,
     return start, end
 
 
+def _pivot(answer: str) -> str | None:
+    """The first period of the later part a one-year answer names: "since 2021" → 2021, "after 2023"
+    → 2024, "after mid-2023" → 2023-Q3, "before 2021" → 2021."""
+    m = _PIVOT.search(answer)
+    if m is None:
+        return None
+    word, qualifier, year = m.group(1).lower(), (m.group(2) or "").strip().lower(), int(m.group(3))
+    if qualifier == "mid-":
+        return f"{year}-Q3"
+    if (
+        word == "since"
+        or qualifier == "early"
+        or (word in {"before", "prior to"} and qualifier != "the end of")
+    ):
+        return str(year)
+    return str(year + 1)
+
+
 def align_period(
     plan: ResearchPlan, question: str, latest_year: int, answer: str | None = None
 ) -> ResearchPlan:
@@ -166,7 +190,8 @@ def align_period(
     years when left to choose.
     A clarification `answer` that names years has the last word: one year with a direction moves
     only that bound ("start from 2018", "until 2022"), keeping the other; otherwise the answer's own
-    period replaces the question's."""
+    period replaces the question's. In a before/after comparison, one year with "after", "since" or
+    "before" moves the comparison's pivot instead, and the window keeps both sides of it."""
     if not plan.in_scope:
         return plan
     start, end = _named_period(plan, question, latest_year)
@@ -175,11 +200,19 @@ def align_period(
         if _YEAR.search(question)
         else "because the question names no years, so it ends at the latest complete year"
     )
+    pivot = plan.comparison_start
     named = {int(y) for y in _YEAR.findall(answer or "")}
+    comparing = plan.comparison_start is not None or bool(_COMPARE.search(question))
     if named:
         reason = "to match the years in the researcher's answer"
         year = next(iter(named)) if len(named) == 1 else None
-        if year is not None and _FROM.search(answer or "") and year <= end:
+        moved = _pivot(answer or "") if year is not None and comparing else None
+        if moved is not None:
+            # Keep both sides of the new pivot inside the window.
+            pivot, split = moved, int(moved[:4])
+            start = min(start, split - 1 if len(moved) == 4 else split)
+            end = max(end, min(split, latest_year))
+        elif year is not None and _FROM.search(answer or "") and year <= end:
             start = year
         elif year is not None and _BEFORE.search(answer or "") and year - 1 >= start:
             end = year - 1
@@ -187,10 +220,20 @@ def align_period(
             end = year
         else:
             start, end = _named_period(plan, answer or "", latest_year)
-    if (start, end) == (plan.start_year, plan.end_year):
+    if (start, end, pivot) == (plan.start_year, plan.end_year, plan.comparison_start):
         return plan
     had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
     note = f"The period was set to {start}-{end} {reason} (the plan had {had})."
+    if pivot != plan.comparison_start:
+        note = (
+            f"The comparison was set to split at {pivot}, over {start}-{end}, {reason} "
+            f"(the plan split at {plan.comparison_start or 'no point'} over {had})."
+        )
     return plan.model_copy(
-        update={"start_year": start, "end_year": end, "assumptions": [*plan.assumptions, note]}
+        update={
+            "start_year": start,
+            "end_year": end,
+            "comparison_start": pivot,
+            "assumptions": [*plan.assumptions, note],
+        }
     )
