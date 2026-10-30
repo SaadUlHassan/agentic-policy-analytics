@@ -177,6 +177,21 @@ def test_the_plan_period_covers_the_years_the_question_names(question, planned, 
     assert (len(result.assumptions) > len(plan.assumptions)) == (aligned != planned)
 
 
+@pytest.mark.parametrize(
+    ("question", "answer", "aligned"),
+    [
+        ("Employment from 2020 to 2024", "2015 to 2019", (2015, 2019)),  # the answer replaces the question
+        ("Employment from 2020 to 2024", "Information & Communications", (2020, 2024)),
+        ("How is the sector doing?", "ICT, from 2016 to 2018", (2016, 2018)),
+        ("How is the sector doing?", "Information & Communications", (2021, 2025)),
+    ],
+)
+def test_a_clarification_that_names_years_sets_the_period(question, answer, aligned):
+    plan = PLAN.model_copy(update={"start_year": 2018, "end_year": 2022})
+    result = align_period(plan, question, latest_year=2025, answer=answer)
+    assert (result.start_year, result.end_year) == aligned
+
+
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():
     ctx = _ctx()
     await _tools(extraction_tools(ctx, PLAN))["fetch_dataset"].ainvoke(

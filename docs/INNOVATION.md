@@ -31,7 +31,7 @@ The build rests on one idea: **a policy researcher must be able to trust every n
 
 ## 4. Scalability and performance for large datasets
 
-**Now.** Graph state holds references only, so checkpoints stay small. Dataset artifacts are content-addressed and shared across analyses, and computations are keyed by fingerprint so a resumed step reuses them. Workers scale horizontally; leases, the reconciler and the source rate limits coordinate through Postgres and Redis. Under load (10 concurrent analyses, 50 WebSocket clients, 20 reads a second) the platform kept p95 event delivery at 99 ms with zero lost or incorrect results. The main delay is queue wait (p50 2.6 s) on a single worker, which is what more workers remove.
+**Now.** Graph state refers to evidence (datasets and computations) by reference rather than copying it, so checkpoints stay small until the report step adds claims and the finished report. Dataset artifacts are content-addressed and shared across analyses, and computations are keyed by fingerprint so a resumed step reuses them. Leases, the reconciler and the source rate limits coordinate through Postgres and Redis, so workers are designed to scale horizontally, though only one worker has been load-tested. Under load (10 concurrent analyses, 50 WebSocket clients, 20 reads a second, with the offline stand-in model on snapshot data) the platform kept p95 event delivery at 99 ms with zero lost or incorrect results. The main delay is queue wait (p50 2.6 s) on that single worker, which more workers should remove.
 
 **Next.**
 - **Columnar evidence and pushed-down computation.** Store observations as Parquet and compute with DuckDB, so a statistic over a large establishment-level table runs where the data is and only results reach the agents. Reuse each artifact across analyses until its source's `updated_at` changes.
@@ -57,7 +57,7 @@ These are supporting controls; compliance would still need the agency's own asse
 
 ## 7. Multi-cloud resilience and cost
 
-**Now.** The router falls back between Bedrock (Nova Pro) and OpenAI (GPT-5.5) in both directions, owns all retries, opens a circuit breaker after three failures, and records every call. That record proved its worth when the OpenAI account ran out of credits mid-evaluation: the ledger identified exactly which runs were affected, and they were reported as "not evaluated", not as passes or failures. Cost is shown only when every call's usage is known. A live analysis cost at least $0.20; the offline mode ran the end-to-end and load tests (782 analyses) for nothing.
+**Now.** The router falls back between Bedrock (Nova Pro) and OpenAI (GPT-5.5) in both directions, owns all retries, opens a circuit breaker after three failures, and records every call. That record proved its worth when the OpenAI account ran out of credits mid-evaluation: the ledger identified exactly which runs were affected, and they were reported as "not evaluated", not as passes or failures. Cost is shown only when every call's usage is known. A live analysis cost at least $0.20; the offline stand-in, on snapshot data, ran the end-to-end and load tests (782 analyses) for nothing.
 
 **Next.**
 - **Budget guards.** A per-team spending cap, checked against the ledger before each analysis starts, so spending stops at a known point rather than when a provider account runs dry mid-run.

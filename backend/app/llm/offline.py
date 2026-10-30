@@ -155,6 +155,28 @@ def _window(messages: Sequence[BaseMessage]) -> tuple[str, str]:
     return str(plan["start_year"]), str(plan["end_year"])
 
 
+def _narrative(messages: Sequence[BaseMessage]) -> dict[str, Any]:
+    """A summary that says which way each verified finding went, as a writer reading them would."""
+    findings = str(messages[-1].content).split("Verified findings:\n", 1)[-1].splitlines()
+
+    def direction(subject: str) -> str | None:
+        line = next((f for f in findings if subject in f.lower()), None)
+        if line is None:
+            return None
+        return "fell" if re.search(r"\b(fell|declined)\b", line) else "rose"
+
+    said = [
+        f"{name} {verb}"
+        for name, subject in (("Employment", "employment level"), ("vacancies", "job vacancies"))
+        if (verb := direction(subject))
+    ]
+    return {
+        "title": "ICT employment and vacancies",
+        "summary": " and ".join(said) + "." if said else "",
+        "limitations": [],
+    }
+
+
 def _verdicts(messages: Sequence[BaseMessage]) -> dict[str, Any]:
     sentences = str(messages[-1].content).split("Sentences to check:\n", 1)[1].splitlines()
     return {
@@ -195,12 +217,7 @@ class OfflineChatModel(BaseChatModel):
         if "NextAction" in bound:
             return _call("NextAction", _next_action(messages))
         if "ReportNarrative" in bound:
-            narrative = {
-                "title": "ICT employment and vacancies",
-                "summary": "Employment and vacancies rose.",
-                "limitations": [],
-            }
-            return _call("ReportNarrative", narrative)
+            return _call("ReportNarrative", _narrative(messages))
         if "SupportVerdicts" in bound:
             return _call("SupportVerdicts", _verdicts(messages))
         if "OptionChoice" in bound:

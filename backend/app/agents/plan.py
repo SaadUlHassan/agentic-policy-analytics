@@ -120,7 +120,9 @@ _AFTER = re.compile(
 )
 
 
-def align_period(plan: ResearchPlan, question: str, latest_year: int) -> ResearchPlan:
+def align_period(
+    plan: ResearchPlan, question: str, latest_year: int, answer: str | None = None
+) -> ResearchPlan:
     """The plan's period is the one the question names, decided in this order:
     - "after" or "since" the latest year named: from the earliest year named to `latest_year` (the
       last complete year), so a before/after comparison keeps its later side;
@@ -129,9 +131,12 @@ def align_period(plan: ResearchPlan, question: str, latest_year: int) -> Researc
     - otherwise: from the earliest year named to the latest.
     A question that names no year ("recently", "the last five years") gets a period ending at
     `latest_year`, keeping the plan's span (five years when it has none): models default to stale
-    years when left to choose."""
+    years when left to choose. A clarification `answer` that names years replaces the question's
+    period: the researcher has said which years they mean."""
     if not plan.in_scope:
         return plan
+    if answer and _YEAR.search(answer):
+        question = answer
     years = [int(y) for y in _YEAR.findall(question)]
     start: int | None
     if not years:
