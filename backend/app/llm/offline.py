@@ -96,10 +96,12 @@ def _last_computation(messages: Sequence[BaseMessage]) -> dict[str, Any]:
 
 
 def _claim_on_last(
-    messages: Sequence[BaseMessage], predicate: str, field: str, n: int, lead_in: str = ""
+    messages: Sequence[BaseMessage], predicates: tuple[str, str], field: str, n: int, lead_in: str = ""
 ) -> AIMessage:
+    """Draft a claim on the last computation, choosing the rising or falling predicate from its value."""
     computation = _last_computation(messages)
     result = computation["fields"][field]
+    predicate = predicates[0] if result["value"] > 0 else predicates[1]
     assertion = {
         "predicate": predicate,
         "computation_id": computation["computation_id"],
@@ -137,12 +139,14 @@ def _analytics_step(messages: Sequence[BaseMessage], window: tuple[str, str]) ->
             "compute", {"tool": "cagr", "series_key": EMPLOYMENT, "start": start, "end": end}, "CAGR.", n
         )
     if n == 1:
-        return _claim_on_last(messages, "cagr.growth", "cagr_pct", n)
+        return _claim_on_last(messages, ("cagr.growth", "cagr.decline"), "cagr_pct", n)
     if n == 2:
         args = {"tool": "change_between", "series_key": VACANCIES, "start": f"{start}-Q1", "end": f"{end}-Q4"}
         return _act("compute", args, "Vacancy change.", n)
     if n == 3:
-        return _claim_on_last(messages, "change.increase", "pct_change", n, "Over the same period,")
+        return _claim_on_last(
+            messages, ("change.increase", "change.decrease"), "pct_change", n, "Over the same period,"
+        )
     return _act("finish", {"summary": "Two findings verified."}, "Done.", n)
 
 

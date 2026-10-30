@@ -136,6 +136,10 @@ def test_how_a_question_is_put_is_asked_to_be_fixed_but_never_refuses_it():
         ("Employment from 2020 to 2024", (2019, 2023), (2020, 2024)),
         ("ICT employment under SSIC 2020 in 2023", (2023, 2023), (2023, 2023)),
         ("How is the sector doing?", (2021, 2025), (2021, 2025)),
+        # No year named: the period ends at the latest complete year, keeping the plan's span.
+        ("How is the sector doing?", (2018, 2022), (2021, 2025)),
+        ("How has ICT employment changed recently?", (2023, 2024), (2024, 2025)),
+        ("How is the sector doing?", (None, None), (2021, 2025)),
         ("Employment from 2020 to 2024", (None, None), (2020, 2024)),
         ("Employment from 2020 to 2024", (2021, 2025), (2020, 2024)),  # a named end is kept, not widened
         ("ICT employment in the five years before 2020", (2015, 2019), (2015, 2019)),

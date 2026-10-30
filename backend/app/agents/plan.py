@@ -126,26 +126,35 @@ def align_period(plan: ResearchPlan, question: str, latest_year: int) -> Researc
       last complete year), so a before/after comparison keeps its later side;
     - "before" the latest year named: up to the year before it, from the earliest earlier year named,
       or the plan's own start when none is (e.g. "the five years before 2020");
-    - otherwise: from the earliest year named to the latest."""
-    years = [int(y) for y in _YEAR.findall(question)]
-    if not plan.in_scope or not years:
+    - otherwise: from the earliest year named to the latest.
+    A question that names no year ("recently", "the last five years") gets a period ending at
+    `latest_year`, keeping the plan's span (five years when it has none): models default to stale
+    years when left to choose."""
+    if not plan.in_scope:
         return plan
-    last = max(years)
-    before = [int(y) for y in _BEFORE.findall(question)]
+    years = [int(y) for y in _YEAR.findall(question)]
     start: int | None
-    if last in {int(y) for y in _AFTER.findall(question)}:
-        start, end = min(years), latest_year
-    elif before and last <= min(before):
-        end = min(before) - 1
-        start = min((y for y in years if y < min(before)), default=plan.start_year)
+    if not years:
+        span = plan.end_year - plan.start_year if plan.start_year and plan.end_year else 4
+        start, end = latest_year - max(span, 0), latest_year
+        reason = "because the question names no years, so it ends at the latest complete year"
     else:
-        start, end = min(years), last
-    if start is None or start > end:
-        start = end - 4
+        last = max(years)
+        before = [int(y) for y in _BEFORE.findall(question)]
+        if last in {int(y) for y in _AFTER.findall(question)}:
+            start, end = min(years), latest_year
+        elif before and last <= min(before):
+            end = min(before) - 1
+            start = min((y for y in years if y < min(before)), default=plan.start_year)
+        else:
+            start, end = min(years), last
+        if start is None or start > end:
+            start = end - 4
+        reason = "to match the years in the question"
     if (start, end) == (plan.start_year, plan.end_year):
         return plan
     had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
-    note = f"The period was set to {start}-{end} to match the years in the question (the plan had {had})."
+    note = f"The period was set to {start}-{end} {reason} (the plan had {had})."
     return plan.model_copy(
         update={"start_year": start, "end_year": end, "assumptions": [*plan.assumptions, note]}
     )

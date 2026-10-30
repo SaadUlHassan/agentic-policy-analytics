@@ -1294,3 +1294,20 @@ All of the following was verified live: the example query on Bedrock primary, on
 - **Every number is traceable** to an artifact (`eval/results/…`, a named commit, or CI on `main`), and the incomplete PR #10 live rerun is reported as incomplete, next to the complete PR #9 run.
 - **A free way to try it:** the README's quick start offers `LLM_MODE=offline` with `DATA_MODE=snapshot`, which needs no credentials. `.env.example` now lists `LLM_MODE`.
 - **Checked:** every relative link and anchor resolves, and all six Mermaid diagrams parse and render with Mermaid 11.4.
+
+## M4 outcomes: innovation essay, fresh-clone rehearsals, live fixes
+
+**Delivered:** `docs/INNOVATION.md`, about two pages. Each of the brief's seven themes says what exists now, with an example from the code or the evaluation, and what to build next.
+
+**Fresh-clone rehearsals** (29–30 Oct 2026, M1 Pro) of `main` (`813e535`), following the README's free quick start and test section. Each used its own compose project name, so the development stack and its database were untouched.
+- **Rehearsal 1:** every step passed: `make up` 32 s; the sample query completed with two findings; `make smoke`; `make test` (360 backend and 31 frontend tests); `make eval`. Its `make test` time is not valid: the Mac idle-slept for 29 minutes mid-run.
+- **Rehearsal 2:** every step passed, in 3 min 6 s end to end: `make up` 23 s, the query 2 s, `make test` 2 min 24 s.
+- **Cold build:** both rehearsals reused Docker's layer cache. A build without it took 83 s (base images already downloaded), which supports the README's "about two minutes on a first build".
+- **Found and fixed:** a second checkout shares the first one's compose project name, and so its containers and database volume. The README's troubleshooting now says to set `COMPOSE_PROJECT_NAME`.
+
+**Found in live runs on Bedrock, and fixed:**
+- **Stale relative periods.** After "How is the sector doing?" was answered, Nova planned "the most recent five complete years" as 2018–2022. `align_period` only corrected periods against years the question names, so the model's stale default stood.
+  - A question that names no year now gets a period ending at the latest complete year, keeping the plan's span (five years when it has none), and the change is recorded as an assumption.
+  - The researcher's clarification answer is now part of the text the period is aligned against, so an answer that names years counts.
+  - Verified live on Bedrock: the plan's 2018–2022 became 2021–2025.
+- **The offline stand-in always drafted "rose".** With the corrected 2021–2025 window, ICT vacancies fell, and the verifier rightly rejected the stand-in's `change.increase` on its sign rule. The stand-in now chooses the rising or falling predicate from the computed value, as an agent would.

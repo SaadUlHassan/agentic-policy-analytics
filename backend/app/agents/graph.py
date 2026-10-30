@@ -84,7 +84,9 @@ async def interpret(
                 ResearchPlan, messages, agent="coordinator", purpose="plan_repair", deadline=ctx.deadline
             )
         )
-    plan = align_period(plan, state["query"], latest_year=date.today().year - 1)
+    # The researcher's answer to a clarification is part of the question (it may name the years).
+    asked = " ".join(filter(None, [state["query"], state.get("clarification")]))
+    plan = align_period(plan, asked, latest_year=date.today().year - 1)
     if plan.needs_clarification:
         plan = shorten_question(plan)
         if len(plan.clarification_options) > MAX_CLARIFICATION_OPTIONS:
