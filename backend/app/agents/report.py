@@ -110,6 +110,11 @@ def build_report(
                 }
                 for gap in coverage["uncovered"]
             ],
+            *(
+                [{"source": "plan", "text": plan.unavailable_comparison}]
+                if plan.unavailable_comparison
+                else []
+            ),
             *limitations,
         ],
         "citations": [c.model_dump(mode="json") for c in citations.citations()],

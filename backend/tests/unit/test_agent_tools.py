@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -228,8 +229,8 @@ COMPARISON = "Did growth weaken after mid-2022, compared with 2020 to mid-2022?"
             None,
         ),
         ("ICT versus construction employment, 2020 to 2024", None, "before 2023", (2020, 2022), None),
-        # A split after the latest complete year has nothing after it: the plan's split stands.
-        (COMPARISON, "2022-Q3", "after 2025", (2020, 2025), "2022-Q3"),
+        # A split after the latest complete year has nothing after it: no split is substituted.
+        (COMPARISON, "2022-Q3", "after 2025", (2020, 2025), None),
         ("Compare ICT employment before and after the change", None, "since 2026", (2020, 2025), None),
     ],
 )
@@ -259,12 +260,60 @@ def test_a_pivot_after_the_latest_year_is_dropped_whoever_chose_it(pivot, answer
     assert len(dropped) == (1 if int(pivot[:4]) > 2025 else 0)
 
 
-def test_a_split_after_the_latest_year_is_explained_not_applied():
+def test_a_comparison_that_cannot_be_made_is_recorded_not_substituted():
     plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": "2022-Q3"})
     result = align_period(plan, COMPARISON, latest_year=2025, answer="after 2025")
-    assert result.assumptions[-1].startswith(
-        "The researcher's split at 2026 is after the latest complete year (2025)"
+    assert result.comparison_start is None
+    assert result.unavailable_comparison == (
+        "The comparison before and after 2026 cannot be made: 2026 is after the latest complete year "
+        "(2025), so there is nothing after it to compare."
     )
+    assert result.assumptions[-1] == result.unavailable_comparison
+    # The field is the platform's: the model is never offered it.
+    assert "unavailable_comparison" not in json.dumps(ResearchPlan.model_json_schema())
+    # Without a request that can't be met, a comparison is unspecified, not unavailable.
+    assert (
+        align_period(plan, COMPARISON, latest_year=2025, answer="since 2023").unavailable_comparison is None
+    )
+
+
+def test_no_period_comparison_is_suggested_or_computed_when_it_cannot_be_made():
+    from app.agents.tools import suggested_computations
+    from app.data.identity import MeasureType
+
+    years = ["2020", "2021", "2022", "2023", "2024", "2025"]
+    assert [x["tool"] for x in suggested_computations(MeasureType.FLOW, years, comparable=False)] == [
+        "cumulative"
+    ]
+    assert [x["tool"] for x in suggested_computations(MeasureType.FLOW, years)] == [
+        "cumulative",
+        "compare_periods",
+    ]
+
+
+async def test_compute_refuses_a_period_comparison_the_question_cannot_have():
+    ctx = _ctx()
+    plan = PLAN.model_copy(
+        update={"unavailable_comparison": "The comparison before and after 2026 cannot be made."}
+    )
+    await _tools(extraction_tools(ctx, plan))["fetch_dataset"].ainvoke(
+        {"dataset_id": "M184071", "rationale": "r"}
+    )
+    await _tools(extraction_tools(ctx, plan))["select_series"].ainvoke(
+        {"series_key": VACANCIES, "reason": "fits", "rationale": "r"}
+    )
+    with pytest.raises(RuntimeError, match="no period comparison for this question"):
+        await _tools(analytics_tools(ctx, plan))["compute"].ainvoke(
+            {
+                "tool": "compare_periods",
+                "series_key": VACANCIES,
+                "a_start": "2020-Q1",
+                "a_end": "2022-Q4",
+                "b_start": "2023-Q1",
+                "b_end": "2024-Q4",
+                "rationale": "r",
+            }
+        )
 
 
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():
@@ -689,6 +738,22 @@ async def test_caveats_of_a_retained_association_are_in_the_report():
         "Communications: the two series count different populations (establishments vs total employment)"
     ) in texts
     assert any("serially dependent" in t for t in texts)
+
+
+def test_a_comparison_that_cannot_be_made_is_a_report_limitation():
+    from app.agents.report import build_report
+
+    reason = (
+        "The comparison before and after 2026 cannot be made: 2026 is after the latest complete year (2025)."
+    )
+    report = build_report(
+        PLAN.model_copy(update={"unavailable_comparison": reason}), _ctx().evidence, None, question="q"
+    )
+    assert {"source": "plan", "text": reason} in report["limitations"]
+    assert all(
+        lim["source"] != "plan"
+        for lim in build_report(PLAN, _ctx().evidence, None, question="q")["limitations"]
+    )
 
 
 # -- data-quality panel ----------------------------------------------------------------------------

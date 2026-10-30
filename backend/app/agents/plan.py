@@ -6,6 +6,7 @@ import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from app.connectors.catalog import Catalog
 from app.data.taxonomy import Taxonomy
@@ -30,6 +31,9 @@ class ResearchPlan(BaseModel):
         description="If the question compares before and after a point in time, the first period of "
         "the later part, e.g. '2022-Q3' for 'after mid-2022' or '2023' for 'since 2023'; otherwise null",
     )
+    # Set by the platform, never by the model (it is left out of the model's schema): why the
+    # before/after comparison the researcher asked for cannot be made. No substitute is compared.
+    unavailable_comparison: SkipJsonSchema[str | None] = None
     frequency: Literal["annual", "quarterly"] | None = Field(
         default=None,
         description="Only if the researcher asks for annual or quarterly figures; otherwise null",
@@ -180,6 +184,13 @@ def _pivot(answer: str) -> str | None:
     return str(year + 1)
 
 
+def _cannot_compare(pivot: str, latest_year: int) -> str:
+    return (
+        f"The comparison before and after {pivot} cannot be made: {pivot} is after the latest complete "
+        f"year ({latest_year}), so there is nothing after it to compare."
+    )
+
+
 def align_period(
     plan: ResearchPlan, question: str, latest_year: int, answer: str | None = None
 ) -> ResearchPlan:
@@ -204,14 +215,13 @@ def align_period(
         if _YEAR.search(question)
         else "because the question names no years, so it ends at the latest complete year"
     )
-    pivot, notes = plan.comparison_start, []
+    pivot, unavailable, notes = plan.comparison_start, plan.unavailable_comparison, []
     # A pivot after the latest complete year has nothing after it, whoever chose it (the model may
-    # adopt the researcher's answer when it re-plans): the comparison splits the period in the middle.
+    # adopt the researcher's answer when it re-plans). That comparison cannot be made, and no other
+    # split is compared in its place: the report says so instead.
     if pivot is not None and int(pivot[:4]) > latest_year:
-        notes.append(
-            f"The split at {pivot} is after the latest complete year ({latest_year}), so there is "
-            f"nothing after it to compare; the comparison splits the period in the middle instead."
-        )
+        unavailable = _cannot_compare(pivot, latest_year)
+        notes.append(unavailable)
         pivot = None
     named = {int(y) for y in _YEAR.findall(answer or "")}
     comparing = plan.comparison_start is not None or bool(_BEFORE_AND_AFTER.search(question))
@@ -221,14 +231,12 @@ def align_period(
         moved = _pivot(answer or "") if year is not None and comparing else None
         if moved is not None and int(moved[:4]) > latest_year:
             if moved != plan.comparison_start:  # otherwise the note above already says so
-                notes.append(
-                    f"The researcher's split at {moved} is after the latest complete year ({latest_year}), "
-                    f"so there is nothing after it to compare; the comparison keeps its split at "
-                    f"{pivot or 'the middle of the period'}."
-                )
+                unavailable = _cannot_compare(moved, latest_year)
+                notes.append(unavailable)
+            pivot = None
         elif moved is not None:
             # Keep both sides of the new pivot inside the window.
-            pivot, split = moved, int(moved[:4])
+            pivot, unavailable, split = moved, None, int(moved[:4])
             start = min(start, split - 1 if len(moved) == 4 else split)
             end = max(end, min(split, latest_year))
         elif year is not None and _FROM.search(answer or "") and year <= end:
@@ -254,6 +262,7 @@ def align_period(
             "start_year": start,
             "end_year": end,
             "comparison_start": pivot,
+            "unavailable_comparison": unavailable,
             "assumptions": [*plan.assumptions, *notes],
         }
     )

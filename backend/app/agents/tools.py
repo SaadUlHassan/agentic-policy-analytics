@@ -489,16 +489,18 @@ def _at_frequency(period: str, window: list[str]) -> str:
 
 
 def suggested_computations(
-    measure: MeasureType, window: list[str], comparison_start: str | None = None
+    measure: MeasureType, window: list[str], comparison_start: str | None = None, *, comparable: bool = True
 ) -> list[dict[str, str]]:
     """Statistics that are eligible for this kind of series over the plan window, with exact arguments.
-    A period comparison splits the window where the question's later part starts, else in half."""
+    A period comparison splits the window where the question's later part starts, else in half; none
+    is suggested when the comparison asked for cannot be made (`comparable` false)."""
     start, end = window[0], window[-1]
     split = _at_frequency(comparison_start, window) if comparison_start else None
     half = window.index(split) if split in window[1:] else len(window) // 2
     halves = {"a_start": start, "a_end": window[half - 1], "b_start": window[half], "b_end": end}
     if measure is MeasureType.FLOW:
-        return [{"tool": "cumulative", "start": start, "end": end}, {"tool": "compare_periods", **halves}]
+        cumulative = {"tool": "cumulative", "start": start, "end": end}
+        return [cumulative, {"tool": "compare_periods", **halves}] if comparable else [cumulative]
     suggestions = [
         {"tool": "change_between", "start": start, "end": end},
         {"tool": "trend", "start": start, "end": end},
@@ -524,7 +526,12 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
                     "plan_window": [window[0], window[-1]],
                     # A pair's correlations are listed first under its leading series.
                     "suggested_computations": [c for c in correlations if c["series_key"] == key]
-                    + suggested_computations(sel.source.identity.measure_type, window, plan.comparison_start),
+                    + suggested_computations(
+                        sel.source.identity.measure_type,
+                        window,
+                        plan.comparison_start,
+                        comparable=plan.unavailable_comparison is None,
+                    ),
                 }
             )
         for refusal in refusals:
@@ -559,6 +566,8 @@ def analytics_tools(ctx: AgentContext, plan: ResearchPlan) -> list[BaseTool]:
         selection = ctx.evidence.selected.get(series_key)
         if selection is None:
             raise RuntimeError(f"{series_key!r} is not a selected series")
+        if tool == "compare_periods" and plan.unavailable_comparison:
+            raise RuntimeError(f"no period comparison for this question: {plan.unavailable_comparison}")
         needed = _ARGS[tool]
         if missing := [a for a in needed if not params.get(a)]:
             raise RuntimeError(f"{tool} needs {', '.join(missing)}")

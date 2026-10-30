@@ -381,8 +381,14 @@ async def report(state: GraphState, runtime: Runtime[AgentContext]) -> dict[str,
             )
     if not plan.in_scope:
         built["limitations"].insert(0, {"source": "coordinator", "text": plan.scope_note or "Out of scope."})
-    # Completed only when every planned sector x metric has a verified finding and nothing was refused.
-    complete = bool(built["findings"]) and not ctx.evidence.refusals and not built["coverage"]["uncovered"]
+    # Completed only when every planned sector x metric has a verified finding, nothing was refused, and
+    # the comparison asked for could be made.
+    complete = (
+        bool(built["findings"])
+        and not ctx.evidence.refusals
+        and not built["coverage"]["uncovered"]
+        and not plan.unavailable_comparison
+    )
     status = AnalysisStatus.COMPLETED if complete else AnalysisStatus.COMPLETED_WITH_LIMITATIONS
     await ctx.writer.emit(
         "coordinator",
