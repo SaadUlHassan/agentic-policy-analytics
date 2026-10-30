@@ -39,6 +39,7 @@ async def test_an_offline_analysis_completes_with_verified_findings(sessions, da
         "Over the same period, job vacancies in I",
     ]
     assert report["verification"]["claims_rejected"] == 0
+    assert report["summary"] == "Employment rose and vacancies rose."  # follows the findings it summarises
     assert models == {"offline-bedrock", "offline-openai"}  # recorded as offline, never as a real model
 
 
@@ -64,3 +65,8 @@ async def test_an_ambiguous_offline_question_is_asked_about_then_answered(
         sessions, database_url, checkpoints, analysis.id, await _resume_intent(sessions, analysis.id)
     )
     assert resumed == "completed"
+    # No years named: the period ends at the latest complete year, over which ICT vacancies fell.
+    async with sessions() as session:
+        report = await session.scalar(select(ReportRow.content).where(ReportRow.analysis_id == analysis.id))
+    assert "fell" in report["findings"][1]["text"]
+    assert report["summary"] == "Employment rose and vacancies fell."

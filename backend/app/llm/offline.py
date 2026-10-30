@@ -96,10 +96,12 @@ def _last_computation(messages: Sequence[BaseMessage]) -> dict[str, Any]:
 
 
 def _claim_on_last(
-    messages: Sequence[BaseMessage], predicate: str, field: str, n: int, lead_in: str = ""
+    messages: Sequence[BaseMessage], predicates: tuple[str, str], field: str, n: int, lead_in: str = ""
 ) -> AIMessage:
+    """Draft a claim on the last computation, choosing the rising or falling predicate from its value."""
     computation = _last_computation(messages)
     result = computation["fields"][field]
+    predicate = predicates[0] if result["value"] > 0 else predicates[1]
     assertion = {
         "predicate": predicate,
         "computation_id": computation["computation_id"],
@@ -137,18 +139,42 @@ def _analytics_step(messages: Sequence[BaseMessage], window: tuple[str, str]) ->
             "compute", {"tool": "cagr", "series_key": EMPLOYMENT, "start": start, "end": end}, "CAGR.", n
         )
     if n == 1:
-        return _claim_on_last(messages, "cagr.growth", "cagr_pct", n)
+        return _claim_on_last(messages, ("cagr.growth", "cagr.decline"), "cagr_pct", n)
     if n == 2:
         args = {"tool": "change_between", "series_key": VACANCIES, "start": f"{start}-Q1", "end": f"{end}-Q4"}
         return _act("compute", args, "Vacancy change.", n)
     if n == 3:
-        return _claim_on_last(messages, "change.increase", "pct_change", n, "Over the same period,")
+        return _claim_on_last(
+            messages, ("change.increase", "change.decrease"), "pct_change", n, "Over the same period,"
+        )
     return _act("finish", {"summary": "Two findings verified."}, "Done.", n)
 
 
 def _window(messages: Sequence[BaseMessage]) -> tuple[str, str]:
     plan = json.loads(str(messages[1].content).split("Research plan: ", 1)[1].split("\n", 1)[0])
     return str(plan["start_year"]), str(plan["end_year"])
+
+
+def _narrative(messages: Sequence[BaseMessage]) -> dict[str, Any]:
+    """A summary that says which way each verified finding went, as a writer reading them would."""
+    findings = str(messages[-1].content).split("Verified findings:\n", 1)[-1].splitlines()
+
+    def direction(subject: str) -> str | None:
+        line = next((f for f in findings if subject in f.lower()), None)
+        if line is None:
+            return None
+        return "fell" if re.search(r"\b(fell|declined)\b", line) else "rose"
+
+    said = [
+        f"{name} {verb}"
+        for name, subject in (("Employment", "employment level"), ("vacancies", "job vacancies"))
+        if (verb := direction(subject))
+    ]
+    return {
+        "title": "ICT employment and vacancies",
+        "summary": " and ".join(said) + "." if said else "",
+        "limitations": [],
+    }
 
 
 def _verdicts(messages: Sequence[BaseMessage]) -> dict[str, Any]:
@@ -191,12 +217,7 @@ class OfflineChatModel(BaseChatModel):
         if "NextAction" in bound:
             return _call("NextAction", _next_action(messages))
         if "ReportNarrative" in bound:
-            narrative = {
-                "title": "ICT employment and vacancies",
-                "summary": "Employment and vacancies rose.",
-                "limitations": [],
-            }
-            return _call("ReportNarrative", narrative)
+            return _call("ReportNarrative", _narrative(messages))
         if "SupportVerdicts" in bound:
             return _call("SupportVerdicts", _verdicts(messages))
         if "OptionChoice" in bound:

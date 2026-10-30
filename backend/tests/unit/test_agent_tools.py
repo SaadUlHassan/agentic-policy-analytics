@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -136,6 +137,10 @@ def test_how_a_question_is_put_is_asked_to_be_fixed_but_never_refuses_it():
         ("Employment from 2020 to 2024", (2019, 2023), (2020, 2024)),
         ("ICT employment under SSIC 2020 in 2023", (2023, 2023), (2023, 2023)),
         ("How is the sector doing?", (2021, 2025), (2021, 2025)),
+        # No year named: the period ends at the latest complete year, keeping the plan's span.
+        ("How is the sector doing?", (2018, 2022), (2021, 2025)),
+        ("How has ICT employment changed recently?", (2023, 2024), (2024, 2025)),
+        ("How is the sector doing?", (None, None), (2021, 2025)),
         ("Employment from 2020 to 2024", (None, None), (2020, 2024)),
         ("Employment from 2020 to 2024", (2021, 2025), (2020, 2024)),  # a named end is kept, not widened
         ("ICT employment in the five years before 2020", (2015, 2019), (2015, 2019)),
@@ -171,6 +176,163 @@ def test_the_plan_period_covers_the_years_the_question_names(question, planned, 
     result = align_period(plan, question, latest_year=2025)
     assert (result.start_year, result.end_year) == aligned
     assert (len(result.assumptions) > len(plan.assumptions)) == (aligned != planned)
+
+
+@pytest.mark.parametrize(
+    ("question", "answer", "aligned"),
+    [
+        ("Employment from 2020 to 2024", "2015 to 2019", (2015, 2019)),  # the answer replaces the question
+        ("Employment from 2020 to 2024", "Information & Communications", (2020, 2024)),
+        ("How is the sector doing?", "ICT, from 2016 to 2018", (2016, 2018)),
+        ("How is the sector doing?", "Information & Communications", (2021, 2025)),
+        # One year with a direction moves only that bound.
+        ("Employment from 2020 to 2024", "start from 2018", (2018, 2024)),
+        ("Employment from 2020 to 2024", "since 2021", (2021, 2024)),
+        ("Employment from 2020 to 2024", "until 2022", (2020, 2022)),
+        ("Employment from 2020 to 2024", "only the years before 2023", (2020, 2022)),
+        ("How is the sector doing?", "ICT, starting in 2019", (2019, 2025)),
+        # A year with no direction, or a bound that would cross the other, is the whole period.
+        ("Employment from 2020 to 2024", "just 2023", (2023, 2023)),
+        ("Employment from 2020 to 2024", "until 2018", (2018, 2018)),
+    ],
+)
+def test_a_clarification_that_names_years_sets_the_period(question, answer, aligned):
+    plan = PLAN.model_copy(update={"start_year": 2018, "end_year": 2022})
+    result = align_period(plan, question, latest_year=2025, answer=answer)
+    assert (result.start_year, result.end_year) == aligned
+
+
+COMPARISON = "Did growth weaken after mid-2022, compared with 2020 to mid-2022?"
+
+
+@pytest.mark.parametrize(
+    ("question", "pivot", "answer", "aligned", "split"),
+    [
+        # In a comparison, one year with after/since/before moves the pivot; the window keeps both sides.
+        (COMPARISON, "2022-Q3", "after 2023", (2020, 2025), "2024"),
+        (COMPARISON, "2022-Q3", "since 2021", (2020, 2025), "2021"),
+        (COMPARISON, "2022-Q3", "after mid-2023", (2020, 2025), "2023-Q3"),
+        (COMPARISON, "2022-Q3", "before 2021", (2020, 2025), "2021"),
+        (COMPARISON, "2022-Q3", "since 2020", (2019, 2025), "2020"),  # widened to keep a before side
+        # Unflagged by the plan but worded as a comparison.
+        ("Compare ICT employment before and after the change", None, "after 2022", (2020, 2025), "2023"),
+        # A full answer still sets the period; the pivot stays the plan's.
+        (COMPARISON, "2022-Q3", "2019 to 2024", (2019, 2024), "2022-Q3"),
+        # Not a comparison: the one-bound rule applies.
+        ("Employment from 2020 to 2024", None, "since 2021", (2021, 2024), None),
+        # Comparing sectors is not comparing times.
+        (
+            "Compare ICT and manufacturing employment from 2020 to 2024",
+            None,
+            "since 2021",
+            (2021, 2024),
+            None,
+        ),
+        ("ICT versus construction employment, 2020 to 2024", None, "before 2023", (2020, 2022), None),
+        # A split after the latest complete year has nothing after it: no split is substituted.
+        (COMPARISON, "2022-Q3", "after 2025", (2020, 2025), None),
+        ("Compare ICT employment before and after the change", None, "since 2026", (2020, 2025), None),
+    ],
+)
+def test_a_clarification_in_a_comparison_moves_the_pivot_not_the_window(
+    question, pivot, answer, aligned, split
+):
+    plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": pivot})
+    result = align_period(plan, question, latest_year=2025, answer=answer)
+    assert ((result.start_year, result.end_year), result.comparison_start) == (aligned, split)
+
+
+@pytest.mark.parametrize(
+    ("pivot", "answer", "split"),
+    [
+        ("2026", "after 2025", None),  # the re-plan adopted the answer's split
+        ("2026", None, None),  # the model chose it unprompted
+        ("2027", "since 2023", "2023"),  # a valid answer replaces it
+        ("2025-Q3", None, "2025-Q3"),  # inside the latest complete year: kept
+    ],
+)
+def test_a_pivot_after_the_latest_year_is_dropped_whoever_chose_it(pivot, answer, split):
+    plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": pivot})
+    result = align_period(plan, COMPARISON, latest_year=2025, answer=answer)
+    assert result.comparison_start == split
+    assert (result.start_year, result.end_year) == (2020, 2025)
+    dropped = [a for a in result.assumptions if "after the latest complete year" in a]
+    assert len(dropped) == (1 if int(pivot[:4]) > 2025 else 0)
+
+
+def test_a_comparison_that_cannot_be_made_is_recorded_not_substituted():
+    plan = PLAN.model_copy(update={"start_year": 2020, "end_year": 2025, "comparison_start": "2022-Q3"})
+    result = align_period(plan, COMPARISON, latest_year=2025, answer="after 2025")
+    assert result.comparison_start is None
+    assert result.unavailable_comparison == (
+        "The comparison before and after 2026 cannot be made: 2026 is after the latest complete year "
+        "(2025), so there is nothing after it to compare."
+    )
+    assert result.assumptions[-1] == result.unavailable_comparison
+    # The field is the platform's: the model is never offered it.
+    assert "unavailable_comparison" not in json.dumps(ResearchPlan.model_json_schema())
+    # Without a request that can't be met, a comparison is unspecified, not unavailable.
+    assert (
+        align_period(plan, COMPARISON, latest_year=2025, answer="since 2023").unavailable_comparison is None
+    )
+
+
+@pytest.mark.parametrize("in_scope", [True, False])
+def test_a_model_cannot_declare_a_comparison_unavailable(in_scope):
+    # The field is not in the model's schema, but a model can still send it: it is discarded.
+    injected = ResearchPlan.model_validate(
+        {
+            **PLAN.model_dump(),
+            "in_scope": in_scope,
+            "unavailable_comparison": "No comparison, says the model.",
+        }
+    )
+    assert injected.unavailable_comparison is not None
+    aligned = align_period(injected, "Employment from 2020 to 2024", latest_year=2025)
+    assert aligned.unavailable_comparison is None
+    assert (
+        align_period(injected, COMPARISON, latest_year=2025, answer="since 2023").unavailable_comparison
+        is None
+    )
+
+
+def test_no_period_comparison_is_suggested_or_computed_when_it_cannot_be_made():
+    from app.agents.tools import suggested_computations
+    from app.data.identity import MeasureType
+
+    years = ["2020", "2021", "2022", "2023", "2024", "2025"]
+    assert [x["tool"] for x in suggested_computations(MeasureType.FLOW, years, comparable=False)] == [
+        "cumulative"
+    ]
+    assert [x["tool"] for x in suggested_computations(MeasureType.FLOW, years)] == [
+        "cumulative",
+        "compare_periods",
+    ]
+
+
+async def test_compute_refuses_a_period_comparison_the_question_cannot_have():
+    ctx = _ctx()
+    plan = PLAN.model_copy(
+        update={"unavailable_comparison": "The comparison before and after 2026 cannot be made."}
+    )
+    await _tools(extraction_tools(ctx, plan))["fetch_dataset"].ainvoke(
+        {"dataset_id": "M184071", "rationale": "r"}
+    )
+    await _tools(extraction_tools(ctx, plan))["select_series"].ainvoke(
+        {"series_key": VACANCIES, "reason": "fits", "rationale": "r"}
+    )
+    with pytest.raises(RuntimeError, match="no period comparison for this question"):
+        await _tools(analytics_tools(ctx, plan))["compute"].ainvoke(
+            {
+                "tool": "compare_periods",
+                "series_key": VACANCIES,
+                "a_start": "2020-Q1",
+                "a_end": "2022-Q4",
+                "b_start": "2023-Q1",
+                "b_end": "2024-Q4",
+                "rationale": "r",
+            }
+        )
 
 
 async def test_draft_rules_refuse_digit_lead_ins_and_long_findings_before_verification():
@@ -595,6 +757,22 @@ async def test_caveats_of_a_retained_association_are_in_the_report():
         "Communications: the two series count different populations (establishments vs total employment)"
     ) in texts
     assert any("serially dependent" in t for t in texts)
+
+
+def test_a_comparison_that_cannot_be_made_is_a_report_limitation():
+    from app.agents.report import build_report
+
+    reason = (
+        "The comparison before and after 2026 cannot be made: 2026 is after the latest complete year (2025)."
+    )
+    report = build_report(
+        PLAN.model_copy(update={"unavailable_comparison": reason}), _ctx().evidence, None, question="q"
+    )
+    assert {"source": "plan", "text": reason} in report["limitations"]
+    assert all(
+        lim["source"] != "plan"
+        for lim in build_report(PLAN, _ctx().evidence, None, question="q")["limitations"]
+    )
 
 
 # -- data-quality panel ----------------------------------------------------------------------------

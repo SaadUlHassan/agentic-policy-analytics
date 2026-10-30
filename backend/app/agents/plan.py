@@ -6,6 +6,7 @@ import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from app.connectors.catalog import Catalog
 from app.data.taxonomy import Taxonomy
@@ -30,6 +31,9 @@ class ResearchPlan(BaseModel):
         description="If the question compares before and after a point in time, the first period of "
         "the later part, e.g. '2022-Q3' for 'after mid-2022' or '2023' for 'since 2023'; otherwise null",
     )
+    # Set by the platform, never by the model (it is left out of the model's schema): why the
+    # before/after comparison the researcher asked for cannot be made. No substitute is compared.
+    unavailable_comparison: SkipJsonSchema[str | None] = None
     frequency: Literal["annual", "quarterly"] | None = Field(
         default=None,
         description="Only if the researcher asks for annual or quarterly figures; otherwise null",
@@ -120,20 +124,37 @@ _AFTER = re.compile(
 )
 
 
-def align_period(plan: ResearchPlan, question: str, latest_year: int) -> ResearchPlan:
-    """The plan's period is the one the question names, decided in this order:
-    - "after" or "since" the latest year named: from the earliest year named to `latest_year` (the
-      last complete year), so a before/after comparison keeps its later side;
-    - "before" the latest year named: up to the year before it, from the earliest earlier year named,
-      or the plan's own start when none is (e.g. "the five years before 2020");
-    - otherwise: from the earliest year named to the latest."""
-    years = [int(y) for y in _YEAR.findall(question)]
-    if not plan.in_scope or not years:
-        return plan
-    last = max(years)
-    before = [int(y) for y in _BEFORE.findall(question)]
+# One year in a clarification moves one bound: "start from 2018", "since 2018" / "until 2022".
+_FROM = re.compile(
+    r"\b(?:from|since|after|starting(?:\s+(?:in|from|at))?|start(?:ing)?\s+(?:in|from|at)|beginning(?:\s+in)?)"
+    r"\s+(?:mid-|early\s+|late\s+|the end of\s+)?(19\d{2}|20\d{2})\b",
+    re.IGNORECASE,
+)
+# In a before/after comparison, one year in a clarification names the pivot, not a bound.
+_PIVOT = re.compile(
+    r"\b(after|since|before|prior to)\s+(mid-|early\s+|late\s+|the end of\s+)?(19\d{2}|20\d{2})\b",
+    re.IGNORECASE,
+)
+# A before/after question names both sides; "compare ICT with manufacturing" compares sectors, not times.
+_BEFORE_AND_AFTER = re.compile(
+    r"\b(?:before|prior to)\b.*\b(?:after|since)\b|\b(?:after|since)\b.*\b(?:before|prior to)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNTIL = re.compile(
+    r"\b(?:to|until|till|through|up to|ending(?:\s+in)?)\s+(19\d{2}|20\d{2})\b", re.IGNORECASE
+)
+
+
+def _named_period(plan: ResearchPlan, text: str, latest_year: int) -> tuple[int, int]:
+    """The period `text` names, by the rules `align_period` documents."""
+    years = [int(y) for y in _YEAR.findall(text)]
     start: int | None
-    if last in {int(y) for y in _AFTER.findall(question)}:
+    if not years:
+        span = plan.end_year - plan.start_year if plan.start_year and plan.end_year else 4
+        return latest_year - max(span, 0), latest_year
+    last = max(years)
+    before = [int(y) for y in _BEFORE.findall(text)]
+    if last in {int(y) for y in _AFTER.findall(text)}:
         start, end = min(years), latest_year
     elif before and last <= min(before):
         end = min(before) - 1
@@ -142,10 +163,109 @@ def align_period(plan: ResearchPlan, question: str, latest_year: int) -> Researc
         start, end = min(years), last
     if start is None or start > end:
         start = end - 4
-    if (start, end) == (plan.start_year, plan.end_year):
+    return start, end
+
+
+def _pivot(answer: str) -> str | None:
+    """The first period of the later part a one-year answer names: "since 2021" → 2021, "after 2023"
+    → 2024, "after mid-2023" → 2023-Q3, "before 2021" → 2021."""
+    m = _PIVOT.search(answer)
+    if m is None:
+        return None
+    word, qualifier, year = m.group(1).lower(), (m.group(2) or "").strip().lower(), int(m.group(3))
+    if qualifier == "mid-":
+        return f"{year}-Q3"
+    if (
+        word == "since"
+        or qualifier == "early"
+        or (word in {"before", "prior to"} and qualifier != "the end of")
+    ):
+        return str(year)
+    return str(year + 1)
+
+
+def _cannot_compare(pivot: str, latest_year: int) -> str:
+    return (
+        f"The comparison before and after {pivot} cannot be made: {pivot} is after the latest complete "
+        f"year ({latest_year}), so there is nothing after it to compare."
+    )
+
+
+def align_period(
+    plan: ResearchPlan, question: str, latest_year: int, answer: str | None = None
+) -> ResearchPlan:
+    """The plan's period is the one the question names, decided in this order:
+    - "after" or "since" the latest year named: from the earliest year named to `latest_year` (the
+      last complete year), so a before/after comparison keeps its later side;
+    - "before" the latest year named: up to the year before it, from the earliest earlier year named,
+      or the plan's own start when none is (e.g. "the five years before 2020");
+    - otherwise: from the earliest year named to the latest.
+    A question that names no year ("recently", "the last five years") gets a period ending at
+    `latest_year`, keeping the plan's span (five years when it has none): models default to stale
+    years when left to choose.
+    A clarification `answer` that names years has the last word: one year with a direction moves
+    only that bound ("start from 2018", "until 2022"), keeping the other; otherwise the answer's own
+    period replaces the question's. In a before/after comparison, one year with "after", "since" or
+    "before" moves the comparison's pivot instead, and the window keeps both sides of it."""
+    # Only this function may say a comparison is unavailable: whatever the model put there is discarded.
+    if plan.unavailable_comparison is not None:
+        plan = plan.model_copy(update={"unavailable_comparison": None})
+    if not plan.in_scope:
         return plan
+    start, end = _named_period(plan, question, latest_year)
+    reason = (
+        "to match the years in the question"
+        if _YEAR.search(question)
+        else "because the question names no years, so it ends at the latest complete year"
+    )
+    pivot, unavailable, notes = plan.comparison_start, None, []
+    # A pivot after the latest complete year has nothing after it, whoever chose it (the model may
+    # adopt the researcher's answer when it re-plans). That comparison cannot be made, and no other
+    # split is compared in its place: the report says so instead.
+    if pivot is not None and int(pivot[:4]) > latest_year:
+        unavailable = _cannot_compare(pivot, latest_year)
+        notes.append(unavailable)
+        pivot = None
+    named = {int(y) for y in _YEAR.findall(answer or "")}
+    comparing = plan.comparison_start is not None or bool(_BEFORE_AND_AFTER.search(question))
+    if named:
+        reason = "to match the years in the researcher's answer"
+        year = next(iter(named)) if len(named) == 1 else None
+        moved = _pivot(answer or "") if year is not None and comparing else None
+        if moved is not None and int(moved[:4]) > latest_year:
+            if moved != plan.comparison_start:  # otherwise the note above already says so
+                unavailable = _cannot_compare(moved, latest_year)
+                notes.append(unavailable)
+            pivot = None
+        elif moved is not None:
+            # Keep both sides of the new pivot inside the window.
+            pivot, unavailable, split = moved, None, int(moved[:4])
+            start = min(start, split - 1 if len(moved) == 4 else split)
+            end = max(end, min(split, latest_year))
+        elif year is not None and _FROM.search(answer or "") and year <= end:
+            start = year
+        elif year is not None and _BEFORE.search(answer or "") and year - 1 >= start:
+            end = year - 1
+        elif year is not None and _UNTIL.search(answer or "") and year >= start:
+            end = year
+        else:
+            start, end = _named_period(plan, answer or "", latest_year)
     had = f"{plan.start_year}-{plan.end_year}" if plan.start_year and plan.end_year else "no period"
-    note = f"The period was set to {start}-{end} to match the years in the question (the plan had {had})."
+    if pivot is not None and pivot != plan.comparison_start:
+        notes.append(
+            f"The comparison was set to split at {pivot}, over {start}-{end}, {reason} "
+            f"(the plan split at {plan.comparison_start or 'no point'} over {had})."
+        )
+    elif (start, end) != (plan.start_year, plan.end_year):
+        notes.append(f"The period was set to {start}-{end} {reason} (the plan had {had}).")
+    if not notes:
+        return plan
     return plan.model_copy(
-        update={"start_year": start, "end_year": end, "assumptions": [*plan.assumptions, note]}
+        update={
+            "start_year": start,
+            "end_year": end,
+            "comparison_start": pivot,
+            "unavailable_comparison": unavailable,
+            "assumptions": [*plan.assumptions, *notes],
+        }
     )

@@ -61,7 +61,7 @@ PostgreSQL holds all state; Redis holds only what can be rebuilt from it. One Py
    make up
    ```
 
-   This builds the images, runs the database migrations and waits until Postgres, Redis, the API, the worker and the web app are all healthy (about two minutes on a first build).
+   This builds the images, runs the database migrations and waits until Postgres, Redis, the API, the worker and the web app are all healthy (about two minutes on a first build, plus downloading the base images).
 
 4. **Use it.** Open <http://localhost:3000>, pick a sample query or type your own, and watch the agents work. The API is on <http://localhost:8000> (OpenAPI docs at `/docs`).
 
@@ -106,7 +106,7 @@ The integration tests and the live evaluation use the compose Postgres and Redis
 
 | Command | What it runs | Needs |
 |---|---|---|
-| `make test` | 360 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
+| `make test` | 396 backend tests (unit, integration, evaluation) and 31 frontend tests | uv and Node dependencies; Postgres and Redis for the 105 integration tests |
 | `make coverage` | The same, with coverage; backend core packages are gated at 80% (currently 94%) | as `make test` |
 | `make eval` | Deterministic gates: golden computations against independently computed values, refusal correctness, the adversarial verifier suite. Writes `eval/results/deterministic.{json,md}` | uv dependencies only |
 | `make e2e` | Playwright browser tests at 375, 768 and 1280 px against an isolated offline stack (ports 8200/3200), torn down afterwards | Docker, Node dependencies and Playwright's Chromium |
@@ -195,6 +195,7 @@ The reasoning behind each design decision is in [ARCHITECTURE.md](ARCHITECTURE.m
 
 ## Troubleshooting
 
+- **Running a second copy beside an existing one:** compose names the project `policy-analytics`, so a second checkout would share the first one's containers and database volume. Give it its own name and ports, for example `COMPOSE_PROJECT_NAME=policy-copy` with different `*_PORT` values in its `.env`.
 - **A port is already in use:** change `WEB_PORT`, `API_PORT`, `POSTGRES_PORT` or `REDIS_PORT` in `.env`. If you change `API_PORT`, rebuild the web image (`make up` does).
 - **An analysis fails with `LLM_UNAVAILABLE`:** neither provider answered. Check the credentials, or run with `LLM_MODE=offline`. `make probe` shows what each configured model can do.
 - **Bedrock says the model is not available:** request model access in the Bedrock console for your region, or set `BEDROCK_MODEL_ID` to a model you have access to and re-run `make probe`.
@@ -206,4 +207,5 @@ The reasoning behind each design decision is in [ARCHITECTURE.md](ARCHITECTURE.m
 - [ARCHITECTURE.md](ARCHITECTURE.md): system design, agent workflow, claim verification, job lifecycle, event delivery, database schema, design decisions.
 - [TESTING.md](TESTING.md): test strategy, hallucination detection, evaluation gates and results, load results.
 - [DATA_SOURCES.md](DATA_SOURCES.md): every dataset with its identity, definitions and quirks; the snapshot approach; adding a source.
+- [docs/INNOVATION.md](docs/INNOVATION.md): how the platform would evolve for secure government environments, with what exists now and what to build next.
 - [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md): the plan the build followed, with the outcomes recorded at each milestone.
